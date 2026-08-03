@@ -1,80 +1,252 @@
 # Sobre del Barrio × Raiz Memory
-### The first mobile Confidential Tokens wallet — and the durable event index that keeps it alive
+### A mobile Confidential Tokens wallet — and the durable event index that keeps its history alive
 
-> *Contributions are sealed. The fund is made of glass. And the wallet remembers.*
+> *Contributions are sealed on-chain. The fund is made of glass, on purpose. And the wallet remembers.*
 
 **Stellar Summit SP 2026 · Special Bounty: Confidential-Token & Private-Payment Wallets · Team: Raiz Protocol**
 
+Everything below was executed against **Stellar testnet on 2026-08-03**. Every contract id, tx hash and timing is real and clickable; nothing here is a mockup.
+
 ---
 
-## What this is
+## 1. What this is
 
-In Latin American neighborhoods everyone sees *who* contributes to a common cause — that's solidarity. How *much* each person gives is nobody's business — that's dignity. **Sobre del Barrio** ("the neighborhood envelope") encodes that social norm with OpenZeppelin's **Confidential Tokens**: an Android wallet where neighbors and tourists contribute to community goals with encrypted amounts and visible participation, while each goal's **auditor view key is published openly** so anyone can independently verify the fund's total. Individual privacy, collective transparency.
+In Latin American neighborhoods everyone sees *who* contributes to a common cause — that's solidarity. How *much* each person gives is nobody's business — that's dignity. **Sobre del Barrio** ("the neighborhood envelope") encodes that norm with OpenZeppelin's **Confidential Tokens**: an Android wallet where neighbors contribute to community goals with the amount encrypted inside the transaction, participation public, and the goal's **auditor view key published on purpose** so anyone can verify the fund without asking us for anything.
 
-A privacy wallet reconstructs its history from contract events — and RPC nodes forget them after ~7 days. So this submission ships with its own memory: **Raiz Memory**, a durable event index any wallet (ours, or an SPP wallet — it indexes ciphertext, it can't read your amounts) can point at by changing one URL.
+**Stated precisely** (see [§8](#8-limitations-read-this-part)): a contribution's amount appears **nowhere** in the transaction — not as a field, not as a range. It is readable by the sender, by the goal, and by whoever holds the goal's published view key. That key opens the fund **itemized**, contribution by contribution — that is what "glass" means here, and it is deliberate. What the published key never opens is a contributor's **balance**: it cannot read the sender side at all.
 
-This covers examples (a) *private balance display wallet* and (c) *durable event indexer* of the bounty brief as one integrated system.
+A privacy wallet reconstructs its state by replaying contract events — and Soroban RPC nodes forget them after about 7 days. So this submission ships its own memory: **Raiz Memory**, a durable `getEvents`-shaped index that any wallet adopts by changing one URL.
 
-## Repository layout
+## 2. Two of the bounty's example builds, as one system
+
+**(a) A CT wallet with private balances and private send** — the full cycle runs on a real mid-range phone, keys never leaving it ([§4](#4-proof-that-it-works-end-to-end)).
+
+**(c) A durable event indexer past the RPC window** — because the primitive's own authors say so. Nethermind's private-payments README, under *Limitations*:
+
+> "**Stellar Events retention**: The app relies heavily on Stellar events. But RPC nodes only store events for a small retention window (7 days). This means that the demo will not work for users onboarded after 7 days of contract deployment because they couldn't re-play events history."
+>
+> — [NethermindEth/stellar-private-payments](https://github.com/NethermindEth/stellar-private-payments), `README.md` L121 (vendored @ `a1bf177`)
+
+Not hypothetical. The **official** CT demo wrapper was deployed at ledger `3013364`; ask the public RPC for its history today (`getEvents`, `startLedger: 3013364`) and you get:
+
+```json
+{"jsonrpc":"2.0","id":1,"error":{"code":-32600,
+ "message":"startLedger must be within the ledger range: 3832437 - 3953396"}}
+```
+
+The reference implementation of Confidential Tokens has already lost its own early history.
+
+**How Raiz Memory differs from Nethermind's `tools/bootnode`.** Their bootnode is a deployment-scoped archive proxy for *their* wallet: it caches `getEvents` pages for one SPP deployment and, once a request is back inside the retention window, hands the client to its main RPC with a JSON-RPC `-32002` error. A sync-gap patch, and a good one. Raiz Memory is a **general durable index**: any contract id, no handoff, one `getEvents`-shaped endpoint answering for the whole life of a contract, plus `/coverage` stating honestly what it holds. Its configured set is four testnet contracts at once — our CT wrapper, our `goal_meta`, the official CT demo wrapper, and Nethermind's SPP EURC pool; in Session 2 it archived 3,630 real events from the last two alone, and adding SPP was one line of `CONTRACT_IDS`.
+
+## 3. Deployed reality (Stellar testnet)
+
+| What | Contract id | Code | Deployed by |
+|---|---|---|---|
+| `goal_meta` — goal registry | `CBNVY2AAHA4SP3MX4XKJAZGS63SF4GIFNHUAAQPRSKYAXY3XR6HKIQAZ` | **ours** (`/contracts/goal-meta`) | us |
+| CT wrapper over XLM | `CBWSANZN7YIMA4CWLNSAZO3HSD5NZDC2GZQJ434MOPQR7RDNVYQSDHAT` | OpenZeppelin, unmodified | **us** (ledger 3950128) |
+| UltraHonk verifier | `CBFCYFND44SNQPKMQNHB3KX2C7K4U5WSVUMFJY34OV46YAN2SACM3UIA` | OZ/Nethermind, unmodified | **us** |
+| Auditor registry | `CBUSX5B56KB73FAAIIHW7ISSZEGHDKQTOWML74LBPOWWGCEFEZPLHE25` | OpenZeppelin, unmodified | **us** |
+| Underlying XLM SAC | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` | Stellar | — |
+
+We deployed **our own instance** of the OZ stack for one reason: on the official deployment the auditor registry is admin-gated, and registering a view key fails with a verified `Error(Contract, #2000)` = `AccessControlError::Unauthorized` — the published-view-key pattern is impossible there. As admin of our own instance we mint two auditor ids: `0` = custodian (private, used by contributors), `1` = **the goal's published view key**. Full reasoning in [`scripts/ct-flow.md` §1](scripts/ct-flow.md).
+
+**The goal.** `goal_meta` **goal id 1** — *"Techo de la casa comunal"*, display target 500 XLM, created in tx [`e27b9f1d…`](https://stellar.expert/explorer/testnet/tx/e27b9f1dba855c37ef728d3e6a43d90ca695b15191dbf7076ce1da82c5e71699) (ledger 3952518). **Goal id 0 is a dead placeholder** from an earlier run, created before the real Grumpkin point existed — ignore it.
+
+- Goal CT account: `GAJPXAL725N44NMEZ3XIN66ZJ7XURJNLXIDGIOOR7D3E23DIRGLIM73X` (registered under auditor id 1)
+- **Published view key `k1`:** `0x0066c14835195705220b7be6f1146aec9cecfb6ecb2b6667bd1d234234afdb16`
+
+`goal_meta` holds the goal's story, its account, its published view key and its harvest timeline. Its design invariant, enforced by there being no such parameter anywhere in the ABI: **an amount never touches this contract** ([`src/lib.rs`](contracts/goal-meta/src/lib.rs)).
+
+## 4. Proof that it works end to end
+
+### On-device milestone — 4/4 real transactions from a phone
+
+Vivo Y21 (Android 13, 4 GB RAM, 8 cores), 2026-08-03. The WebView does only secret-free work (witness → proof → payload encode → build/simulate) and returns an **unsigned** envelope; Kotlin holds the seed in `EncryptedSharedPreferences`, signs it, and submits over JSON-RPC. All `SUCCESS`, against our own wrapper:
+
+| Op (UX name) | Tx | Ledger | Wall clock | ZK proof |
+|---|---|---|---|---|
+| `register` ("Abrir mi sobre") | [`e7f9309a…`](https://stellar.expert/explorer/testnet/tx/e7f9309a679fcd1e56472bd30b76c08fc5872fe59cbebb09965ca2ba42c64ec3) | 3953009 | 27.5 s | 9.2 s |
+| `deposit` 10 XLM ("Sellar") | [`2ff5108e…`](https://stellar.expert/explorer/testnet/tx/2ff5108e734a2749db27de100a3586912ca84ab353dc578ed5b107e6e73f6f43) | 3953056 | 11.3 s | none¹ |
+| `merge` ("Cosechar") | [`0dcbefb4…`](https://stellar.expert/explorer/testnet/tx/0dcbefb42953d1dbfd7db620d6b33122824c66a5b33973d61d5432d97aa78038) | 3953068 | 7.2 s | none¹ |
+| `confidential_transfer` 5 XLM → goal ("Aportar") | [`7f9c6f9a…`](https://stellar.expert/explorer/testnet/tx/7f9c6f9ade687a5e222a9e5f72a104820244fb33f85f6cb3458b704446307c66) | 3953087 | 28.6 s | 17.0 s |
+
+¹ `deposit` and `merge` carry no ZK proof in the CT preview — read from the contract source, not assumed. The phone then decrypted its own balance locally to exactly **50,000,000 stroops** spendable (10 deposited − 5 contributed). Signing is byte-surgery on the envelope, validated byte-exact against `@stellar/stellar-sdk` 14.6.1 through a generated fixture and JVM unit tests. The same cycle also exists as a headless CLI run with its own real tx hashes and a chain-verified balance decryption ([`scripts/ct-flow.md` §4](scripts/ct-flow.md)).
+
+### What the explorer can and cannot see
+
+`node scripts/ct-flow/visibility.mjs` decodes the real envelopes:
+
+- **`deposit`** — the amount is **public**: `arg[2] = i128(1000000000)` in the invocation, plus the underlying SAC transfer event. Crossing from public XLM into a confidential balance is a public act by construction. That is *sealing an envelope*, not *giving*.
+- **`confidential_transfer`** — the amount exists **nowhere**. `arg[2]` is a 15,308-byte payload whose field *names* an explorer can pretty-print (`c_spend_new`, `c_tx`, `r_e`, `sigma`, `proof`, …) and whose every value is a field element, a Grumpkin point, or the 14,592-byte proof. The emitted event repeats the same ciphertext. There is no amount field to show.
+
+### On-device proving: the Android WebView finding
+
+| Environment | register | transfer | withdraw |
+|---|---|---|---|
+| Node on PC, 22 threads | 1.4 s | 1.8 s | 1.7 s |
+| Chrome on device, 8 threads (`crossOriginIsolated`) | 2.7 s warm / 6.4 s cold | 5.4–6.7 s | 4.6–6.1 s |
+| Chrome on device, 1 thread | 8.6 s | 15.7 s | 15.6 s |
+| **Android WebView (always 1 thread)** | **10.8 s** | **15.7 s** | **14.2 s** |
+
+**Android WebView never becomes `crossOriginIsolated`.** Same device, same URL (`http://localhost:4173` over `adb reverse` — secure context, `COOP: same-origin` + `COEP: credentialless` on every response): Chrome 150 reports `crossOriginIsolated: true · SharedArrayBuffer: true · threads: 8`; the WebView reports `false · false · 1`. The CT demo docs' cross-origin-isolation recipe cannot work inside a WebView at any header configuration — **WebView-embedded CT dApps prove single-threaded, by platform**. bb.js degrades gracefully, so it is a 2.6× tax rather than a blocker, which is why the day-0 decision was a full **GO** ([`docs/SPIKE_DIA0.md`](docs/SPIKE_DIA0.md)), with a UX budget of ~10–17 s per proof.
+
+Related: the demo SDK's `CircuitProver` calls `UltraHonkBackend(bytecode)` with no options and bb.js 0.87 defaults to `{threads: 1}`, so the official demo proves single-threaded *even when* isolation succeeds. Our shim passes threads explicitly. Both findings: [`friction-report.md`](friction-report.md).
+
+## 5. Don't trust our UI
+
+### Verify the goal total yourself
+
+Reconstructs and **verifies** the fund from the public RPC and the published key alone — it never talks to our app or any server we run. Setup ≈ 15 minutes, most of it one `pnpm install` ([`scripts/verify-goal-total/README.md`](scripts/verify-goal-total/README.md)):
+
+```sh
+git clone https://github.com/brozorec/stellar-confidential-token-demo vendor/stellar-confidential-token-demo
+git -C vendor/stellar-confidential-token-demo checkout ac67499
+cd vendor/stellar-confidential-token-demo
+npx -y pnpm@10.33.0 install && npx -y pnpm@10.33.0 build:sdk
+cd ../..
+node scripts/verify-goal-total/verify-goal-total.mjs
+```
+
+Real output (testnet, ledger 3952632):
 
 ```
-/wallet        Android app (Kotlin) — CT layer over the RAÍZ codebase
-/contracts     goal_meta (Soroban) — community goal registry; amounts NEVER touch it
+[1] cross-checking the published secret against on-chain state
+  goal_meta[1] "Techo de la casa comunal" (target 500 XLM)
+    stored view-key point == k1·H                      OK
+  goal registered under auditor_id 1; registry key == k1·H   OK
+
+[2] replaying confidential events from ledger 3950128
+  + ledger 3950172  aporte   from GDUTRP…DJ2I  25 XLM (decrypted via k1)  tx 58363138…
+  · ledger 3950173  merge (cosecha): pending folded into spendable
+  + ledger 3950262  aporte   from GDUTRP…DJ2I  25 XLM (decrypted via k1)  tx d302c02f…
+  · ledger 3950263  merge (cosecha): pending folded into spendable
+
+[3] re-committing decrypted openings against on-chain Pedersen commitments
+  commit(500000000, Σr_tx) == on-chain spendable commitment   OK
+  commit(0, Σr_tx) == on-chain receiving commitment   OK
+
+Goal total: 50 XLM — verified on-chain at ledger 3952632
+```
+
+Decryption alone would prove nothing (a script can print any number), so: the published key is authenticated against **two** independent on-chain records, each contribution is decrypted into a full Pedersen *opening* (`v`, `r_tx`), and the accumulated openings are re-committed and compared against the goal's live on-chain commitments. Pedersen commitments are binding, so a match means the chain itself is committed to those amounts.
+
+Point `--rpc` at a Raiz Memory instance instead of the RPC and the same verification keeps working after the 7-day window closes. That is the whole thesis, in one flag.
+
+### Verify a contributor's receipt
+
+Selective disclosure with the preview's real `disclose_sender` circuit — a proof that *I sent this on-chain transfer, for this amount*, sealed to one recipient's key ([`scripts/receipt/README.md`](scripts/receipt/README.md)):
+
+```sh
+node scripts/receipt/make-receipt.mjs    # verifier mints (P_R, ν); Marta proves → receipt.json
+node scripts/receipt/verify-receipt.mjs  # the §5.3 verification, chain-anchored
+```
+
+```
+  ✔ VK pinned: disclose_sender artifact matches the shared 1760B verification key
+  ✔ Resolved ref_E on-chain: transfer GDUTRP… → GAJPXA… in tx 5836313815… (ledger 3950172)
+  ✔ Read PVK_A / PVK_B from the on-chain accounts
+  ✔ UltraHonk proof verified against the reconstructed public inputs
+  ✔ Decrypted ṽ_disc with r_R and ν → amount 250000000
+
+VERIFIED: the on-chain transfer in tx 58363138… (ledger 3950172)
+  was SENT by GDUTRPFZAL3QRHCY47A6KAI6EK4XJTZ35J5IWI7YN3VGHHWA5F77DJ2I
+  for exactly 25 XLM (250000000 stroops)
+```
+
+Flip one byte of the proof and it is `REJECTED at §5.3 stage [verify-proof]`. The verifier trusts only the chain: every public input is re-read from the ledger, and the receipt contributes just the proof plus a ciphertext sealed to the verifier's key — a leaked receipt file reveals nothing to anyone else.
+
+## 6. Quickstart per component
+
+```
+/wallet        Android app (Kotlin) — headless WebView prover + native signing
+/contracts
+  /goal-meta   goal_meta (Soroban, Rust) — goal registry; amounts never touch it
 /raiz-memory   Rust indexer — getEvents-shaped API beyond the 7-day window
-/scripts       verify-goal-total — decrypt the goal balance with the PUBLISHED view key,
-               outside the app: don't trust our UI, check the chain yourself
+/scripts       ct-flow (deploy + full CT cycle) · verify-goal-total · receipt · prover-bench
+/vendor        (gitignored) read-only clones of external repos
 ```
 
-## Quickstart
+**Raiz Memory** (Rust + SQLite, no external services):
 
 ```bash
-# Raiz Memory (indexes the CT wrapper + goal_meta on testnet)
-cd raiz-memory && cp .env.example .env   # set RPC_URL + CONTRACT_IDS
-cargo run                                 # or: docker compose up
-curl localhost:8090/health
-curl "localhost:8090/events?contractId=C...&startLedger=0"
-
-# goal_meta contract
-cd contracts/goal-meta && cargo test
-stellar contract build && stellar contract deploy --network testnet ...
-
-# Wallet: open /wallet in Android Studio, set EVENT_SOURCE_URL to your Raiz Memory
+cd raiz-memory
+cp .env.example .env          # set RPC_URL + CONTRACT_IDS (comma-separated)
+cargo run                     # or: docker compose up
+curl localhost:8090/health    # {"status":"ok","latest_indexed_ledger":N}
+curl localhost:8090/coverage  # per contract: what we actually hold
+curl "localhost:8090/events?contractId=CBWSANZN…&startLedger=3950128"
+cargo test                    # 4 tests, offline (RPC mocked, throwaway SQLite)
 ```
 
-## How Confidential Tokens are used (the full cycle, on a phone)
+Purge demo: start with `RETENTION_SIMULATION_LEDGERS=120`, then compare `…/events?contractId=…&source=rpc-simulation` (an RPC that forgets, complete with an `oldestLedger` floor) against the same URL without the parameter (Raiz Memory that remembers). Only requests carrying that parameter are affected.
 
-| CT operation | In Sobre del Barrio | UX name |
+**goal_meta**:
+
+```bash
+cd contracts/goal-meta
+cargo test                        # 13 tests
+stellar contract build
+bash ../../scripts/goal-flow.sh   # create_goal → get_goal → record_harvest → verify via getEvents
+```
+
+**Scripts** (`verify-goal-total`, `receipt`, `ct-flow`, `prover-bench`) all need the vendor clone + `build:sdk` shown in [§5](#5-dont-trust-our-ui). `verify-goal-total` needs no proving backend at all; `receipt` and `ct-flow` additionally read secrets from a gitignored `.env.deploy`.
+
+**Wallet**:
+
+```powershell
+node wallet/tools/build-prover-assets.mjs   # packs bb.js/wasm/circuits from /vendor (~13 MB, gitignored)
+cd wallet
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'   # a JDK 17-21; PATH Java 25 cannot run Gradle 8.10.2
+.\gradlew.bat :app:assembleDebug            # macOS/Linux: JAVA_HOME=... ./gradlew :app:assembleDebug
+```
+
+Install, launch, tap the operations. The app currently ships a working **debug console** — the four real CT operations above plus locally decrypted balances — not the final UI. `TODO(session-6): replace with the Metas / Aportar / Mi Sobre screens and the Raiz Memory-backed contribution timeline (configurable event-source URL).`
+
+## 7. Reused vs. original
+
+**Reused, unmodified, with credit** — imported or served as-is; no vendor file was edited:
+
+| Source | Pin | Used for |
 |---|---|---|
-| register | First-run setup of an account into the CT system | "Abrir mi sobre" |
-| deposit | Public XLM → confidential balance | "Sellar" |
-| transfer | Confidential contribution to the goal account | "Aportar" |
-| merge | Goal admin folds pending contributions into available balance | "Cosechar" (public timeline event) |
-| withdraw | Confidential → public XLM | "Abrir el sobre" |
-| auditor view key | **Inverted**: the goal's auditor is *the public* — key published in-app and in this README | "Verifícalo tú mismo" |
-| selective disclosure | Contributor's private receipt of their own contribution | "Mi recibo" |
+| [OpenZeppelin/stellar-contracts](https://github.com/OpenZeppelin/stellar-contracts) (branch `feat/confidential-verifier-ultrahonk`) | `9b5ed96` | CT wrapper, auditor registry, Noir circuits; deployed from vendor-built WASM + verification keys |
+| [brozorec/stellar-confidential-token-demo](https://github.com/brozorec/stellar-confidential-token-demo) | `ac67499` | proving stack (`@aztec/bb.js` 0.87.0, `@noir-lang/noir_js` 1.0.0-beta.9), SDK witness builders, auditor decryption, `disclose_sender` disclosure artifacts |
+| [NethermindEth/stellar-private-payments](https://github.com/NethermindEth/stellar-private-payments) | `a1bf177` | read-only reference; its testnet pool is one of the contracts Raiz Memory indexes |
 
-Proofs are generated **on-device** in an isolated WebView running the unmodified CT proving stack, bridged to Kotlin (see `/wallet/.../ProverWebViewBridge.kt`). Key custody, signing and submission stay in the native wallet manager.
+**Declared prior team work:** RAÍZ, our pre-existing Android app (Kotlin, passkeys via the OZ Smart Account Kit) and its Soroban contracts. It is why we could target mobile at all — with an honest boundary: the module in `/wallet` here was written from scratch for this bounty and imports no RAÍZ code yet; folding this CT layer back into RAÍZ is post-summit work.
 
-## Reused vs. original (in the spirit of "100% original work")
+**Original, built for this bounty:**
 
-**Reused, with credit, unmodified:** OpenZeppelin's Confidential Token contracts and proving stack; the pre-existing RAÍZ app base (our own project — payments, passkeys via OZ smart accounts kit — declared as prior work).
-**Original, built for this bounty:** the `goal_meta` contract; the entire mobile CT layer (WebView prover bridge, CT state management on Android, the three screens); the public-view-key transparency pattern; Raiz Memory (design + implementation); the friction report filed as issues on the CT repo: [links].
+- `goal_meta` Soroban contract (13 tests, explicit TTL policy checked against the live testnet archival config)
+- **Raiz Memory** — the indexer, its `getEvents`-shaped API, `/coverage`, and the purge-demo mode
+- the Android CT layer: headless-WebView `ProverWebViewBridge` + APK-packaged proving assets, the JS shim, and native Kotlin key custody / Ed25519 signing / RPC submission
+- the **published-view-key pattern** (auditor id 1 as the goal's public auditor) and the deployment model it implies
+- `scripts/`: `ct-flow` (own-instance deploy, full cycle, view-key audit, envelope visibility), `verify-goal-total`, `receipt`, `prover-bench`, `goal-flow.sh`
+- [`friction-report.md`](friction-report.md) and the 10 issue drafts in [`docs/issues-drafts/`](docs/issues-drafts/)
 
-## Limitations (read this before judging the demo kindly)
+## 8. Limitations (read this part)
 
-- Confidential Tokens are a **developer preview: testnet only, unaudited** — the app says so on screen. No real money.
-- The goal's view key is published by the goal's custodian (this demo: the team). The production design places custody in RAÍZ's communal smart account (passkeys + policies, Protocol 27 delegation) — linked in our roadmap, not faked here.
-- Contributor **identities are visible by design** (that's CT's model, and here it's the feature: solidarity is public). If you need hidden identities too, that's SPP's territory — and Raiz Memory already serves SPP wallets as well.
-- WebView proving is a pragmatic bridge, not the endgame (native proving à la mopro when the mobile Noir stack matures).
-- Raiz Memory declares its coverage honestly at `/coverage` — including where its history starts. An indexer that lies by omission is worse than none.
+- **Confidential Tokens are a developer preview: testnet only, unaudited.** So is SPP. No real money anywhere in this repo.
+- **The published view key opens each contribution, not just the total.** `k1` opens the *recipient channel* of every transfer into the goal, yielding each contribution's amount and its randomness — anyone holding it audits the fund contribution by contribution. What `k1` does **not** open is the sender channel (demonstrated on-chain: `auditTransfer(k1).channelsAgree === false`), so contributor balances are unreadable with it. Read the promise as: *your contribution is invisible to the chain and to bystanders, and legible to the neighborhood's published key; your balance is not in it.*
+- **Contributors have an auditor too, and in this demo it is us.** CT requires every account to commit to an `auditor_id` at `register()`; contributors use id 0, the custodian key, which *does* open the sender channel (verified: amount + the sender's post-transfer balance). That key is private and stays private, but "private from us" is not a claim this deployment can make. It is a property of the preview's compliance design; a real community deployment must decide who holds id 0.
+- **`deposit` is public** ([§4](#what-the-explorer-can-and-cannot-see)) — moving XLM into a confidential balance reveals that amount. Only the contribution itself is confidential.
+- **Identities are visible by design.** That is CT's model, and here it is the feature. If you need counterparties hidden too, that is SPP's territory — which Raiz Memory also indexes.
+- **No per-account view keys exist in the preview**: the unit is a contract-level `auditor_id`, admin-gated to mint (verified `Error #2000` on the official deployment). Our pattern therefore implies a deployment model — one CT wrapper per community, goal accounts under the published id.
+- **Proving is single-threaded in a WebView** (~10–17 s per proof on a 4 GB phone); the Chrome/PWA path is 2.6× faster and stays documented as the alternative.
+- **Raiz Memory has no backfill yet**: an ingestor's first run starts at the current ledger, so an instance must be started while the contract's history is still inside the RPC window. `/coverage` reports this rather than pretending.
+- **Receipts depend on event resolution**: the vendor verifier reads the event from an RPC, so a receipt older than the retention window stops verifying against a bare RPC. Wiring Raiz Memory in as that source is the obvious next step (`BACKLOG.md`, not done).
+- Goal custody in this demo is the team's key; production custody belongs in a communal smart account — roadmap, not faked here. And `goal_meta` goal id 0 is a dead placeholder: the real goal is id 1.
+- Worth flagging to any native Stellar mobile wallet: `*.stellar.org` chains to the Sectigo R46 root, **absent from many Android system trust stores**, so native HTTPS fails with `Trust anchor for certification path not found` while Chromium (which AIA-chases) works. Fixed here with an additive `networkSecurityConfig` — no pinning, no trust bypass.
 
-## Demo video
+## 9. Friction, filed back
 
-[link] — 2:30: a contribution whose amount the explorer cannot show · the goal total verified from outside the app with the published view key · the RPC "forgetting" the timeline and Raiz Memory restoring it by changing one URL.
+[`friction-report.md`](friction-report.md) logs every friction we hit with the CT/SPP previews and the surrounding tooling, with **verbatim** error messages, versions and repro steps — 13 entries covering the admin-gated auditor registry, the silently single-threaded prover, the WebView isolation gap, an RPC filter that rejects a whole call because of one bad id, a `--optimize=false` flag the current CLI no longer accepts, an `InsufficientRefundableFee` on a first TTL-bumping submission, and the Android trust-anchor issue above.
 
-## After the summit
+Ten of them are written up as ready-to-file issue drafts in [`docs/issues-drafts/`](docs/issues-drafts/), each naming its target repo: 5 for the CT demo, 1 for `OpenZeppelin/stellar-contracts`, 2 for `stellar/stellar-rpc`, 2 for `stellar/stellar-cli`. `TODO(session-8): file them upstream after human review and link the issue URLs here.` A preview's most useful hackathon output is a precise bug report, so this is a deliverable, not an appendix.
 
-This is Phase 6.2 of the RAÍZ roadmap (private contributions, public aggregates) pulled six months forward, and the first brick of the neighborhood indexer our DePIN watcher design needs. The work stays on our critical path either way — that's what a good hackathon bet looks like.
+## 10. Demo & deployment
+
+- Demo video (2:30): `TODO(session-9): link the recorded demo — a contribution the explorer cannot show · the total verified from outside the app · the RPC forgetting the timeline and Raiz Memory restoring it by changing one URL.`
+- Public Raiz Memory instance: `TODO(session-8): publish the URL once the instance is deployed; until then run it locally per §6.`
 
 ---
 *Raiz Protocol — community savings on Stellar. The value the neighborhood creates stays in the neighborhood, and the neighborhood decides.*
