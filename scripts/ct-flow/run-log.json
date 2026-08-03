@@ -1,0 +1,54 @@
+{
+  "ranAt": "2026-08-03T15:33:19.386Z",
+  "network": "testnet",
+  "token": "CBWSANZN7YIMA4CWLNSAZO3HSD5NZDC2GZQJ434MOPQR7RDNVYQSDHAT",
+  "accounts": {
+    "marta": "GDUTRPFZAL3QRHCY47A6KAI6EK4XJTZ35J5IWI7YN3VGHHWA5F77DJ2I",
+    "goal": "GAJPXAL725N44NMEZ3XIN66ZJ7XURJNLXIDGIOOR7D3E23DIRGLIM73X"
+  },
+  "auditorIds": {
+    "marta": 0,
+    "goal": 1
+  },
+  "amounts": {
+    "depositStroops": "1000000000",
+    "transferStroops": "250000000"
+  },
+  "steps": [
+    {
+      "name": "deposit Marta",
+      "txHash": "07f9ee556083a4437209bc2221760c4303c3995f123ed1fa6be1bef83265c878",
+      "ledger": 3950259,
+      "explorer": "https://stellar.expert/explorer/testnet/tx/07f9ee556083a4437209bc2221760c4303c3995f123ed1fa6be1bef83265c878",
+      "amountStroops": "1000000000",
+      "amountVisibleOnChain": true
+    },
+    {
+      "name": "merge Marta",
+      "txHash": "e878f66af2aae8ec87460f6a0b3e72860d7043087386022f49fd28579a42f222",
+      "ledger": 3950260,
+      "explorer": "https://stellar.expert/explorer/testnet/tx/e878f66af2aae8ec87460f6a0b3e72860d7043087386022f49fd28579a42f222"
+    },
+    {
+      "name": "confidential_transfer Marta→goal",
+      "txHash": "d302c02f9d16ce343d85e42d29a5572b54988aeb3c337c4399048817f7d90372",
+      "ledger": 3950262,
+      "explorer": "https://stellar.expert/explorer/testnet/tx/d302c02f9d16ce343d85e42d29a5572b54988aeb3c337c4399048817f7d90372",
+      "proveMs": 2115,
+      "proofBytes": 14592,
+      "amountVisibleOnChain": false
+    },
+    {
+      "name": "merge goal",
+      "txHash": "a19b9d396471819c371f21762ad92384bc759c24208fd1ce334f759b3f8761e8",
+      "ledger": 3950263,
+      "explorer": "https://stellar.expert/explorer/testnet/tx/a19b9d396471819c371f21762ad92384bc759c24208fd1ce334f759b3f8761e8"
+    }
+  ],
+  "finalBalances": {
+    "martaSpendableStroops": "1500000000",
+    "goalSpendableStroops": "500000000",
+    "martaMatchesChain": true,
+    "goalMatchesChain": true
+  }
+}

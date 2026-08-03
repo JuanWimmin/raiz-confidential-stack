@@ -1,0 +1,33 @@
+{
+  "network": "testnet",
+  "rpcUrl": "https://soroban-testnet.stellar.org",
+  "passphrase": "Test SDF Network ; September 2015",
+  "deployedAtLedger": 3950128,
+  "deployer": "GBLXWZQ5JVGV2UTPWNZCBVTMPIFKI736CENDR3UH2R3YSDUWXG6OMDDA",
+  "contracts": {
+    "token": "CBWSANZN7YIMA4CWLNSAZO3HSD5NZDC2GZQJ434MOPQR7RDNVYQSDHAT",
+    "verifier": "CBFCYFND44SNQPKMQNHB3KX2C7K4U5WSVUMFJY34OV46YAN2SACM3UIA",
+    "auditor": "CBUSX5B56KB73FAAIIHW7ISSZEGHDKQTOWML74LBPOWWGCEFEZPLHE25",
+    "underlying": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+  },
+  "addrF": "0x0e2c5758543f8b1076071cb14cb1e35e67a85f398b0a1f12ffd642ae0c654a3f",
+  "auditorKeys": [
+    {
+      "id": 0,
+      "label": "custodian (private)",
+      "keyXHex": "0x0cefa961a8283adcec91338b6e49639c73e86c28080fe5067831c4f879ee3687",
+      "keyYHex": "0x2b12373f02a3484309024abec03427b78aab2410890f7c5c8b0a792f326f47e0"
+    },
+    {
+      "id": 1,
+      "label": "goal view key (to be published)",
+      "keyXHex": "0x2ffb9e6131a6a3d8d672f4dc706a72c2a3ace1f477b0f60023f9643e58f27ba0",
+      "keyYHex": "0x1dd0fdd3cfd3116defaed79499e7dd8eab71c43020370394ace56cce802a61ab"
+    }
+  ],
+  "explorer": {
+    "token": "https://stellar.expert/explorer/testnet/contract/CBWSANZN7YIMA4CWLNSAZO3HSD5NZDC2GZQJ434MOPQR7RDNVYQSDHAT",
+    "verifier": "https://stellar.expert/explorer/testnet/contract/CBFCYFND44SNQPKMQNHB3KX2C7K4U5WSVUMFJY34OV46YAN2SACM3UIA",
+    "auditor": "https://stellar.expert/explorer/testnet/contract/CBUSX5B56KB73FAAIIHW7ISSZEGHDKQTOWML74LBPOWWGCEFEZPLHE25"
+  }
+}
