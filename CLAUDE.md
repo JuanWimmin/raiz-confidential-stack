@@ -171,14 +171,22 @@ COULD (solo si sobra tiempo): withdraw completo · segunda meta · métricas.
 
 ```
 Última actualización: 2026-08-02 (Sesión 0 ejecutada)
-Decisión del spike día 0:  PENDIENTE  [GO completo / GO parcial→PWA / NO-GO→D solo]
+Decisión del spike día 0:  GO COMPLETO (3-ago 12:00) — las 3 pruebas corren DENTRO
+                           del WebView en 10.8-15.7 s (<90 s), sin OOM, en un Vivo
+                           Y21 (4 GB). Detalle y matriz completa: docs/SPIKE_DIA0.md.
+                           OJO: WebView NUNCA da crossOriginIsolated (SAB off por
+                           plataforma) → proving SIEMPRE a 1 hilo ahí; Chrome 8
+                           hilos: 2.7-6.7 s. UX debe decir "~10-16 s por prueba".
 Sesión 0 (setup repo):          [x]  /vendor poblado (3 repos, SHAs en Hechos verificados) ·
                                      raiz-memory cargo check OK (0 warnings) ·
                                      goal-meta cargo test OK (1/1, dalek 2.2.0 pinned) ·
                                      URLs CT verificadas · .claude (2 agentes, 5 skills) · git init
-Sesión 1 (spike proving):       [~]  prep lista: spike-findings.md · wallet/ APK
-                                     compila (assembleDebug 39s) · falta MEDIR en
-                                     teléfono → tiempos medidos: ______
+Sesión 1 (spike proving):       [x]  tiempos medidos (Vivo Y21, Android 13):
+                                     WebView 1 hilo: reg 10.8s · transfer 15.7s ·
+                                     withdraw 14.2s — Chrome 8 hilos: reg 2.7s ·
+                                     transfer 5.4-6.7s · withdraw 4.6-6.1s —
+                                     Chrome 1 hilo: 8.6/15.7/15.6s. Sin OOM.
+                                     Medido vía adb por Claude, 6+3+3 corridas OK.
 Sesión 2 (raiz-memory vivo):    [x]  contratos indexados: CBF64DEO…5N3F (CT wrapper
                                      demo, 46 ev) + CCUUDM434…MCGZ (SPP EURC pool,
                                      3584 ev) = 3630 eventos reales · forma real
@@ -204,11 +212,11 @@ Bloqueantes abiertos: ninguno. (Docs de propuestas ya en /docs, 2-ago.)
   y bb.js 0.87 default es threads:1 → todo el demo oficial prueba a 1 hilo aunque
   haya crossOriginIsolated (2-3x regalado; en friction-report). Nuestro shim DEBE
   pasar threads explícito.
-Siguiente paso concreto: Juancho corre el spike en el teléfono (runbook en
-  docs/spike-findings.md §How to serve on LAN + mensaje de Claude): medir prueba
-  de register y transfer, ambas configs (LAN 1-hilo y adb-reverse multihilo),
-  pegar tiempos/errores → registrar en SPIKE_DIA0.md y decidir GO/GO parcial/NO-GO.
-  Deuda para Sesión 3: goal_meta solo trae 1 test; ahí se endurece la suite.
+Siguiente paso concreto: día 1 del plan — Sesión 3 (goal_meta a testnet, empezar
+  en modo plan; ahí se endurece la suite: hoy solo trae 1 test) y Sesión 4 (ciclo
+  CT completo por CLI). La Sesión 5 queda desbloqueada por el GO; su shim debe
+  pasar threads explícito a bb.js y presupuestar ~10-16 s de proving en WebView.
+  Plugin stellar-dev instalado (7 skills oficiales) — disponible al reiniciar sesión.
 ```
 
 ## Documentos de referencia en /docs

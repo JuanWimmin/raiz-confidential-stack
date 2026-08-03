@@ -28,7 +28,9 @@ android {
         //   false -> bb.js silently drops to 1 thread. Measure it as the
         //   degraded configuration, don't read it as a hard failure.
         // ------------------------------------------------------------------
-        buildConfigField("String", "DEMO_URL", "\"http://localhost:3000\"")
+        // Spike measurement targets: :4173 = scripts/prover-bench (proving only,
+        // no Freighter — what we actually time) · :3000 = full CT demo app.
+        buildConfigField("String", "DEMO_URL", "\"http://localhost:4173\"")
     }
 
     buildFeatures {

@@ -47,8 +47,13 @@ const ABI_WASM = realpathSync(
 );
 const CIRCUITS = path.join(SDK, "circuits");
 
-const PORT = 4173;
+const PORT = Number(process.env.PORT ?? 4173);
 const HOST = "0.0.0.0";
+// NO_COI=1 drops the COOP/COEP headers so the page is NOT cross-origin
+// isolated even on a secure context (localhost via adb reverse). This is the
+// honest way to measure bb.js's 1-thread fallback when the phone's Wi-Fi
+// cannot reach the PC's LAN IP (e.g. different subnet / AP isolation).
+const NO_COI = process.env.NO_COI === "1";
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -82,9 +87,12 @@ function routeToFile(urlPath) {
 
 const server = http.createServer((req, res) => {
   const urlPath = new URL(req.url, "http://x").pathname;
-  // COOP/COEP on EVERY response (documents, workers, wasm, errors).
-  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-  res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+  // COOP/COEP on EVERY response (documents, workers, wasm, errors),
+  // unless NO_COI=1 (1-thread fallback measurement mode).
+  if (!NO_COI) {
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+  }
 
   const file = routeToFile(urlPath);
   let stat;
@@ -114,7 +122,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`prover-bench serving on http://${HOST}:${PORT}`);
+  console.log(`prover-bench serving on http://${HOST}:${PORT} (COOP/COEP: ${NO_COI ? "OFF - 1-thread mode" : "on"})`);
   console.log(`  bb.js assets:   ${BB_BROWSER}`);
   console.log(`  acvm wasm:      ${ACVM_WASM}`);
   console.log(`  noirc_abi wasm: ${ABI_WASM}`);
