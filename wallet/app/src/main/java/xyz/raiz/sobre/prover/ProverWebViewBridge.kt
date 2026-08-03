@@ -223,6 +223,25 @@ class ProverWebViewBridge(context: Context) {
             "window.RaizProver.selftest()" + callbackTail(id)
         }
 
+    /**
+     * Invoke a window.RaizChain builder ([fn]: prepareRegister, prepareDeposit,
+     * prepareMerge, prepareTransfer, status) — the secret-free build→simulate→
+     * assemble side of Session 5 step 5. Returns the builder's JSON (unsigned
+     * envelope XDR + metadata); signing and submission stay in Kotlin
+     * (CtWallet). Timeout covers proving + RPC round-trips.
+     */
+    suspend fun chainCall(
+        fn: String,
+        inputsJson: String,
+        timeoutMs: Long = CHAIN_TIMEOUT_MS,
+    ): JSONObject = runProverCall("chain:$fn", timeoutMs) { id ->
+        "if(!window.RaizChain||!window.RaizChain[${JSONObject.quote(fn)}])" +
+            "{AndroidBridge.onProofError('$id','window.RaizChain.' + ${JSONObject.quote(fn)} +" +
+            "' is not defined (stale prover bundle? rebuild assets)');return;}" +
+            "window.RaizChain[${JSONObject.quote(fn)}](${JSONObject.quote(inputsJson)})" +
+            callbackTail(id)
+    }
+
     private fun callbackTail(id: Long): String =
         ".then(function(p){AndroidBridge.onProofReady('$id', JSON.stringify(p));})" +
             ".catch(function(e){AndroidBridge.onProofError('$id', String((e && e.stack) || e));})"
@@ -359,6 +378,10 @@ class ProverWebViewBridge(context: Context) {
 
         /** Spike GO threshold: 90 s per proof (docs/SPIKE_DIA0.md). */
         const val PROOF_TIMEOUT_MS = 90_000L
+
+        /** RaizChain builders: proving (≤90 s budget) + state sync + RPC
+         *  round-trips (simulate + getAccount, testnet latency). */
+        const val CHAIN_TIMEOUT_MS = 180_000L
 
         /** Page + bundle + wasm init are seconds, not minutes. */
         const val READY_TIMEOUT_MS = 30_000L

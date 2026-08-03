@@ -15,25 +15,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import xyz.raiz.sobre.prover.ProverWebViewBridge
+import xyz.raiz.sobre.wallet.CtConfig
+import xyz.raiz.sobre.wallet.CtWallet
+import xyz.raiz.sobre.wallet.WalletStore
 
 /**
- * SESSION 5 DEBUG SCREEN — exercises the real [ProverWebViewBridge]: a headless
- * WebView serving the CT proving bundle from APK assets (WebViewAssetLoader,
- * https://appassets.androidplatform.net) generates a register proof with
- * synthetic inputs on demand and reports the timings here + logcat.
+ * SESSION 5 DEBUG SCREEN — now drives the FULL on-device pipeline (M1):
+ * proof/tx built in the headless WebView (RaizChain), signed in Kotlin
+ * (StellarAccount, seed in EncryptedSharedPreferences), submitted + polled
+ * from Kotlin (SorobanRpc) against OUR CT wrapper on testnet.
  *
- * This replaces the Session 1 full-screen-WebView spike harness (GO decided,
- * evidence in docs/SPIKE_DIA0.md). Still NOT the wallet UI — just the smallest
- * honest surface that proves the Kotlin<->JS bridge end to end. Watch:
+ * Still NOT the wallet UI (Session 6) — the smallest honest surface that
+ * proves register/deposit/merge/transfer end to end from the phone. Watch:
  *   adb logcat -s SobreSpike
  */
 class MainActivity : Activity() {
 
     private lateinit var bridge: ProverWebViewBridge
+    private lateinit var wallet: CtWallet
     private lateinit var status: TextView
     private lateinit var console: TextView
-    private lateinit var selftestButton: Button
+    private val buttons = mutableListOf<Button>()
     private val consoleLines = ArrayDeque<String>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -42,6 +46,7 @@ class MainActivity : Activity() {
         buildUi()
 
         bridge = ProverWebViewBridge(this)
+        wallet = CtWallet(bridge, WalletStore(this))
         // This device family (Vivo) suppresses app logcat: mirror the page
         // console on screen — it is the only viewport into JS-side failures.
         bridge.consoleListener = { line ->
@@ -51,42 +56,55 @@ class MainActivity : Activity() {
         }
         bridge.initialize() // asset-loader URL; no dev server involved
 
-        // Surface page readiness (wasm init etc.) without blocking the button —
-        // pressing it early just suspends on awaitReady() inside the bridge.
         val t0 = SystemClock.elapsedRealtime()
         scope.launch {
             try {
                 bridge.awaitReady()
-                setStatus("prover page ready in ${SystemClock.elapsedRealtime() - t0} ms — tap the button")
+                // Key material only touches Kotlin: derive off the main thread.
+                val accountId = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                    wallet.account.accountId
+                }
+                setStatus(
+                    "prover listo en ${SystemClock.elapsedRealtime() - t0} ms\n" +
+                        "cuenta de la app (custodia Kotlin):\n$accountId\n" +
+                        "wrapper: ${CtConfig.TOKEN.take(8)}… · meta: ${CtConfig.GOAL_ACCOUNT.take(8)}…",
+                )
             } catch (e: Exception) {
-                Log.e(TAG, "prover init failed", e)
-                setStatus("prover init FAILED:\n${e.message}")
+                Log.e(TAG, "init failed", e)
+                setStatus("init FAILED:\n${e.message}")
             }
         }
     }
 
-    private fun runSelftest() {
-        selftestButton.isEnabled = false
-        setStatus("proving register with synthetic inputs…\n(first run also initializes wasm and downloads the public CRS)")
+    /** Shared runner: progress states + honest errors, one op at a time. */
+    private fun runOp(name: String, op: suspend (progress: (String) -> Unit) -> String) {
+        buttons.forEach { it.isEnabled = false }
         val t0 = SystemClock.elapsedRealtime()
+        setStatus("[$name] arrancando…")
         scope.launch {
             try {
-                val r = bridge.selftest()
-                val bridgeMs = SystemClock.elapsedRealtime() - t0
-                val line = "self-test OK: witness ${r.optLong("witnessMs")} ms + " +
-                    "prove ${r.optLong("proveMs")} ms = ${r.optLong("ms")} ms in JS " +
-                    "(${bridgeMs} ms through the bridge, threads=${r.optInt("threads")})"
-                Log.i(TAG, line)
-                setStatus("$line\n\n${r.toString(2)}")
+                val summary = op { line -> runOnUiThread { setStatus("[$name] $line") } }
+                val secs = (SystemClock.elapsedRealtime() - t0) / 1000.0
+                Log.i(TAG, "$name OK in ${secs}s: $summary")
+                setStatus("[$name] COMPLETADO en ${"%.1f".format(secs)} s\n$summary")
             } catch (e: Exception) {
-                // Typed ProverException reaches here; message already logged verbatim.
-                Log.e(TAG, "self-test failed", e)
-                setStatus("self-test FAILED (${e.javaClass.simpleName}):\n${e.message}")
+                Log.e(TAG, "$name failed", e)
+                setStatus("[$name] FALLÓ (${e.javaClass.simpleName}):\n${e.message}")
             } finally {
-                selftestButton.isEnabled = true
+                buttons.forEach { it.isEnabled = true }
             }
         }
     }
+
+    private fun outcomeText(o: CtWallet.TxOutcome): String =
+        if (o.alreadyDone) {
+            "${o.method}: ${o.detail}"
+        } else {
+            "${o.method} CONFIRMADO en ledger ${o.ledger}\n" +
+                "tx ${o.txHashHex}\n" +
+                (if (o.proveMs > 0) "prueba ZK en el teléfono: ${o.proveMs} ms\n" else "") +
+                "${o.detail}\n${o.explorerUrl}"
+        }
 
     private fun buildUi() {
         val pad = (16 * resources.displayMetrics.density).toInt()
@@ -95,22 +113,58 @@ class MainActivity : Activity() {
             setPadding(pad, pad, pad, pad)
         }
         root.addView(TextView(this).apply {
-            text = "Sobre del Barrio — bridge self-test (Session 5)"
+            text = "Sobre del Barrio — M1 pipeline real (Session 5)"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             setTypeface(typeface, Typeface.BOLD)
             setPadding(0, 0, 0, pad / 2)
         })
-        selftestButton = Button(this).apply {
-            text = "Self-test register proof"
-            setOnClickListener { runSelftest() }
+
+        fun addButton(label: String, onClick: () -> Unit) {
+            val b = Button(this).apply {
+                text = label
+                isAllCaps = false
+                setOnClickListener { onClick() }
+            }
+            buttons += b
+            root.addView(b)
         }
-        root.addView(selftestButton)
+
+        addButton("M1: Abrir mi sobre (register, real)") {
+            runOp("register") { p -> outcomeText(wallet.register(p)) }
+        }
+        addButton("M1: Sellar 10 XLM (deposit, real)") {
+            runOp("deposit") { p -> outcomeText(wallet.deposit(10 * STROOPS_PER_XLM, p)) }
+        }
+        addButton("M1: Cosechar (merge, real)") {
+            runOp("merge") { p -> outcomeText(wallet.merge(p)) }
+        }
+        addButton("M1: Aportar 5 XLM a la meta (transfer, real)") {
+            runOp("transfer") { p -> outcomeText(wallet.transferToGoal(5 * STROOPS_PER_XLM, p)) }
+        }
+        addButton("Estado (balances descifrados localmente)") {
+            runOp("estado") { p ->
+                val s: JSONObject = wallet.status(p)
+                val spend = s.optString("spendableStroops", "—")
+                val recv = s.optString("receivingStroops", "—")
+                "registrada: ${s.optBoolean("registered")}\n" +
+                    "spendable: $spend stroops\nreceiving: $recv stroops\n" +
+                    "ledger: ${s.optLong("latestLedger")}"
+            }
+        }
+        addButton("Self-test register proof (sintético)") {
+            runOp("self-test") { _ ->
+                val r = bridge.selftest()
+                "witness ${r.optLong("witnessMs")} ms + prove ${r.optLong("proveMs")} ms " +
+                    "= ${r.optLong("ms")} ms (threads=${r.optInt("threads")})"
+            }
+        }
+
         status = TextView(this).apply {
             typeface = Typeface.MONOSPACE
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextIsSelectable(true)
             setPadding(0, pad / 2, 0, 0)
-            text = "initializing prover page…"
+            text = "inicializando prover…"
         }
         console = TextView(this).apply {
             typeface = Typeface.MONOSPACE
@@ -140,5 +194,6 @@ class MainActivity : Activity() {
     private companion object {
         const val TAG = ProverWebViewBridge.TAG // single logcat tag: SobreSpike
         const val CONSOLE_KEEP = 30 // rolling window of page console lines
+        const val STROOPS_PER_XLM = 10_000_000L
     }
 }

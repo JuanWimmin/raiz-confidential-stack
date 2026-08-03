@@ -35,6 +35,16 @@
  *     scripts/prover-bench/src/witness-inputs.mjs). Returns timing + env,
  *     no proof bytes.
  *
+ *   window.RaizChain.<fn>(inputsJson) -> Promise<result>   (Session 5 step 5)
+ *     Secret-free Soroban invocation builders: build → simulate → assemble an
+ *     invocation of OUR CT wrapper and return the UNSIGNED envelope XDR.
+ *     Kotlin keeps key custody, signs the envelope hash and submits/polls over
+ *     plain JSON-RPC (see wallet/StellarAccount.kt + SorobanRpc.kt). Mirrors
+ *     vendor chain/client.ts invoke() minus sign/send, and chain/contract.ts
+ *     argument shapes verbatim. Functions: prepareRegister, prepareDeposit,
+ *     prepareMerge, prepareTransfer, status — parameter shapes documented at
+ *     each function below.
+ *
  * SECRETS POLICY (project decision, non-negotiable): inputs — including sk —
  * arrive per call and leave scope when the call resolves. Nothing here writes
  * to localStorage/IndexedDB/cookies. The only caches are public, non-secret
@@ -52,6 +62,22 @@ import initACVM from "@noir-lang/acvm_js";
 import initAbi from "@noir-lang/noirc_abi";
 import { Noir } from "@noir-lang/noir_js";
 
+// @stellar/stellar-sdk resolves to its self-contained BROWSER bundle
+// (package.json "browser": dist/stellar-sdk.min.js) under esbuild
+// --platform=browser. The vendor dist modules below import the same specifier,
+// so they share this single instance (XDR objects cross safely). The global
+// `Buffer` those modules expect is provided by esbuild --inject
+// (wallet/tools/buffer-inject.js).
+import {
+  TransactionBuilder,
+  Contract,
+  Address,
+  BASE_FEE,
+  nativeToScVal,
+  xdr,
+  rpc,
+} from "@stellar/stellar-sdk";
+
 // Vendor CT SDK (read-only, bundled as-is; paths relative to this file).
 import { deriveKeys } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/crypto/keys.js";
 import { addressToField } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/crypto/address.js";
@@ -60,6 +86,10 @@ import { pointFromBytes, pointCoords } from "../../../../../../vendor/stellar-co
 import { buildRegisterWitness } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/witness/register.js";
 import { buildTransferWitness } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/witness/transfer.js";
 import { buildWithdrawWitness } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/witness/withdraw.js";
+import { ChainClient } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/chain/client.js";
+import { encodeRegisterData, encodeTransferData } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/chain/payload.js";
+import { StateEngine } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/state/engine.js";
+import { MemoryStore } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/state/store.js";
 
 // ---------------------------------------------------------------------------
 // Asset locations — resolved against this bundle's URL (…/prover/dist/), so
@@ -226,6 +256,28 @@ function buildWitness(kind, p) {
   }
 }
 
+/**
+ * Execute the Noir circuit on `inputs` and produce an UltraHonk proof with the
+ * keccak transcript (the only transcript the on-chain verifier accepts).
+ * Shared by RaizProver.generate and the RaizChain.prepare* builders. First call
+ * per kind also pays wasm init + circuit fetch (witnessMs) and backend init +
+ * CRS download (proveMs) — exactly as before the Session-5 step-5 refactor.
+ */
+async function execAndProve(kind, inputs) {
+  const tW0 = performance.now();
+  await ensureNoirWasm();
+  const circuit = await loadCircuit(kind);
+  const noir = new Noir(circuit);
+  const { witness } = await noir.execute(inputs);
+  const witnessMs = Math.round(performance.now() - tW0);
+
+  const backend = await getBackend(kind, circuit.bytecode);
+  const tP0 = performance.now();
+  const { proof, publicInputs } = await backend.generateProof(witness, KECCAK);
+  const proveMs = Math.round(performance.now() - tP0);
+  return { proof, publicInputs, witnessMs, proveMs };
+}
+
 // ---------------------------------------------------------------------------
 // The two entry points
 // ---------------------------------------------------------------------------
@@ -240,20 +292,7 @@ async function generate(kind, inputsJson) {
   }
   const p = typeof inputsJson === "string" ? JSON.parse(inputsJson) : (inputsJson ?? {});
   const { inputs, payload, next } = buildWitness(kind, p);
-
-  // Phase 1: witness (includes wasm init + circuit fetch on first call).
-  const tW0 = performance.now();
-  await ensureNoirWasm();
-  const circuit = await loadCircuit(kind);
-  const noir = new Noir(circuit);
-  const { witness } = await noir.execute(inputs);
-  const witnessMs = Math.round(performance.now() - tW0);
-
-  // Phase 2: proof (backend init + CRS download included on first call).
-  const backend = await getBackend(kind, circuit.bytecode);
-  const tP0 = performance.now();
-  const { proof, publicInputs } = await backend.generateProof(witness, KECCAK);
-  const proveMs = Math.round(performance.now() - tP0);
+  const { proof, publicInputs, witnessMs, proveMs } = await execAndProve(kind, inputs);
 
   return {
     kind,
@@ -292,9 +331,209 @@ async function selftest() {
 }
 
 // ---------------------------------------------------------------------------
+// window.RaizChain — secret-free Soroban invocation builders (Session 5 §5)
+//
+// Division of labor (project decision, non-negotiable): this side does
+// everything that needs the vendor SDK's XDR/simulation plumbing but holds NO
+// lasting secrets — build → simulate → assemble — and returns the UNSIGNED
+// envelope XDR (base64). Kotlin keeps key custody, signs the envelope hash and
+// submits + polls over plain JSON-RPC. `sk` (needed for witnesses/decryption)
+// passes through per call and leaves scope on resolve, same policy as
+// RaizProver.generate.
+//
+// buildUnsignedInvoke mirrors vendor chain/client.ts invoke() lines 148-167
+// (build → simulate → assemble) minus sign/send; argument shapes mirror
+// chain/contract.ts submitters verbatim.
+//
+// Common params (every function): rpcUrl, token, verifier, auditor (contract
+// strkeys), optional passphrase (defaults to testnet).
+// ---------------------------------------------------------------------------
+
+const DEFAULT_PASSPHRASE = "Test SDF Network ; September 2015";
+const dec = (v) => v.toString(); // bigint -> decimal string (JSON-safe)
+
+function parseParams(json) {
+  return typeof json === "string" ? JSON.parse(json) : (json ?? {});
+}
+
+function reqStr(p, name) {
+  const v = p[name];
+  if (typeof v !== "string" || v.length === 0) {
+    throw new Error(`param '${name}' (string) is required`);
+  }
+  return v;
+}
+
+function chainClient(p) {
+  return new ChainClient({
+    rpcUrl: reqStr(p, "rpcUrl"),
+    networkPassphrase: typeof p.passphrase === "string" ? p.passphrase : DEFAULT_PASSPHRASE,
+    contracts: {
+      token: asStrkey(reqStr(p, "token"), "token"),
+      verifier: reqStr(p, "verifier"),
+      auditor: reqStr(p, "auditor"),
+    },
+  });
+}
+
+const addrScVal = (a) => new Address(a).toScVal();
+
+/** build → simulate → assemble; returns the unsigned envelope for Kotlin. */
+async function buildUnsignedInvoke(client, source, method, args) {
+  const acct = await client.server.getAccount(source);
+  const tx = new TransactionBuilder(acct, {
+    fee: BASE_FEE,
+    networkPassphrase: client.cfg.networkPassphrase,
+  })
+    .addOperation(new Contract(client.cfg.contracts.token).call(method, ...args))
+    .setTimeout(180) // proving happened BEFORE this; 180 s covers sign+submit
+    .build();
+
+  const sim = await client.server.simulateTransaction(tx);
+  if (rpc.Api.isSimulationError(sim)) {
+    throw new Error(`simulate ${method} failed: ${sim.error}`);
+  }
+  const assembled = rpc.assembleTransaction(tx, sim).build();
+  return {
+    method,
+    source,
+    unsignedXdrBase64: assembled.toXDR(),
+    feeStroops: String(assembled.fee), // post-assembly: base fee + resource fee
+    latestLedger: sim.latestLedger,
+  };
+}
+
+/** Per-call state sync — MemoryStore only: the WebView persists nothing. */
+async function syncState(client, p, address) {
+  const keys = deriveKeys(asBig(p.sk, "sk"), addressToField(asStrkey(p.token, "token")));
+  const engine = new StateEngine({
+    client,
+    store: new MemoryStore(),
+    keys,
+    address,
+    fromLedger: Number(p.fromLedger ?? 0),
+  });
+  return { keys, state: await engine.sync() };
+}
+
+/**
+ * prepareRegister({ ...common, account, sk, auditorId?, fromLedger? })
+ * Proves the register circuit, encodes RegisterData, builds the tx.
+ * Short-circuits with { alreadyRegistered: true } — pressing the button twice
+ * must not burn 10 s of proving to earn a simulation error.
+ */
+async function prepareRegister(json) {
+  const p = parseParams(json);
+  const client = chainClient(p);
+  const account = reqStr(p, "account");
+  if (await client.isRegistered(account)) {
+    return { method: "register", account, alreadyRegistered: true };
+  }
+  const w = buildWitness("register", { sk: p.sk, token: p.token });
+  const { proof, witnessMs, proveMs } = await execAndProve("register", w.inputs);
+  const auditorId = Number(p.auditorId ?? 0);
+  const args = [addrScVal(account), xdr.ScVal.scvU32(auditorId), encodeRegisterData(w, proof)];
+  const tx = await buildUnsignedInvoke(client, account, "register", args);
+  return { ...tx, auditorId, witnessMs, proveMs, proofLength: proof.length };
+}
+
+/** prepareDeposit({ ...common, from, to, amountStroops }) — proof-free. */
+async function prepareDeposit(json) {
+  const p = parseParams(json);
+  const client = chainClient(p);
+  const from = reqStr(p, "from");
+  const to = reqStr(p, "to");
+  const amount = asBig(p.amountStroops, "amountStroops");
+  if (amount <= 0n) throw new Error(`amountStroops must be positive (got ${dec(amount)})`);
+  const args = [addrScVal(from), addrScVal(to), nativeToScVal(amount, { type: "i128" })];
+  const tx = await buildUnsignedInvoke(client, from, "deposit", args);
+  return { ...tx, amountStroops: dec(amount) };
+}
+
+/** prepareMerge({ ...common, account }) — proof-free ("cosechar"). */
+async function prepareMerge(json) {
+  const p = parseParams(json);
+  const client = chainClient(p);
+  const account = reqStr(p, "account");
+  return buildUnsignedInvoke(client, account, "merge", [addrScVal(account)]);
+}
+
+/**
+ * prepareTransfer({ ...common, from, to, amountStroops, sk, fromLedger })
+ * Syncs the sender's confidential state (event replay + ECDH, in memory),
+ * reads the recipient's PVK + both auditor keys from chain, proves the
+ * transfer circuit, encodes TransferData, builds the tx.
+ */
+async function prepareTransfer(json) {
+  const p = parseParams(json);
+  const client = chainClient(p);
+  const from = reqStr(p, "from");
+  const to = reqStr(p, "to");
+  const amount = asBig(p.amountStroops, "amountStroops");
+  if (amount <= 0n) throw new Error(`amountStroops must be positive (got ${dec(amount)})`);
+
+  const { keys, state } = await syncState(client, p, from);
+  if (state.spendable.v < amount) {
+    throw new Error(
+      `insufficient confidential spendable balance: have ${dec(state.spendable.v)} stroops, ` +
+        `need ${dec(amount)} (deposit first, or merge pending receiving balance)`,
+    );
+  }
+  const fromAcct = await client.confidentialBalance(from);
+  const toAcct = await client.confidentialBalance(to);
+  if (!fromAcct) throw new Error(`sender ${from} is not registered on the wrapper`);
+  if (!toAcct) throw new Error(`recipient ${to} is not registered on the wrapper`);
+  const kAudS = await client.auditorKey(fromAcct.auditorId);
+  const kAudR = await client.auditorKey(toAcct.auditorId);
+
+  const w = buildTransferWitness({
+    keys,
+    v: state.spendable.v,
+    r: state.spendable.r,
+    amount,
+    pvkB: toAcct.viewingPublicKey,
+    kAudR,
+    kAudS,
+  });
+  const { proof, witnessMs, proveMs } = await execAndProve("transfer", w.inputs);
+  const args = [addrScVal(from), addrScVal(to), encodeTransferData(w, proof)];
+  const tx = await buildUnsignedInvoke(client, from, "confidential_transfer", args);
+  return {
+    ...tx,
+    amountStroops: dec(amount),
+    spendableBeforeStroops: dec(state.spendable.v),
+    recipientAuditorId: toAcct.auditorId,
+    witnessMs,
+    proveMs,
+    proofLength: proof.length,
+  };
+}
+
+/**
+ * status({ ...common, account, sk?, fromLedger? })
+ * registered flag + (when sk is given and registered) locally decrypted
+ * balances via event replay. Read-only; nothing to sign.
+ */
+async function status(json) {
+  const p = parseParams(json);
+  const client = chainClient(p);
+  const account = reqStr(p, "account");
+  const registered = await client.isRegistered(account);
+  const out = { account, registered, latestLedger: await client.latestLedger() };
+  if (registered && p.sk != null) {
+    const { state } = await syncState(client, p, account);
+    out.spendableStroops = dec(state.spendable.v);
+    out.receivingStroops = dec(state.receiving.v);
+    out.syncedLedger = state.syncedLedger;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Install + tell Kotlin we are alive
 // ---------------------------------------------------------------------------
 globalThis.RaizProver = { generate, selftest };
+globalThis.RaizChain = { prepareRegister, prepareDeposit, prepareMerge, prepareTransfer, status };
 
 console.log(
   `[RaizProver] ready — threads=${THREADS} crossOriginIsolated=${globalThis.crossOriginIsolated === true} ` +

@@ -6,11 +6,15 @@
          Soroban testnet RPC. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- usesCleartextTraffic: the dev server is plain http (localhost / LAN).
-         Spike-only; the real app (Session 5+) will not need it. -->
+    <!-- networkSecurityConfig replaces the earlier usesCleartextTraffic attr:
+         it keeps cleartext allowed (localhost spike fallback) AND adds the
+         Sectigo R46 root missing from this device family's system store —
+         without it every Kotlin HTTPS call to *.stellar.org dies with
+         "Trust anchor for certification path not found" (friction-report
+         2026-08-03; the WebView is unaffected because Chromium AIA-chases). -->
     <application
         android:label="@string/app_name"
-        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <!-- configChanges: keep the WebView alive across rotation — an

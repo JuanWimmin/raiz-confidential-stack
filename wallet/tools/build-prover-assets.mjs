@@ -44,7 +44,13 @@ const sdk = path.join(repoRoot, "vendor", "stellar-confidential-token-demo", "pa
 // Resolve vendor asset dirs through the pnpm symlinks (same as prover-bench).
 const noirJsReal = realpathSync(path.join(sdk, "node_modules", "@noir-lang", "noir_js"));
 const noirScope = path.dirname(noirJsReal);
-const nodePath = path.dirname(noirScope); // .../node_modules — for esbuild's bare @noir-lang/* imports
+// Two roots for esbuild's bare-import resolution (NODE_PATH is a list):
+//  - the pnpm-store node_modules that holds @noir-lang/*
+//  - the vendor SDK package's own node_modules, where @stellar/stellar-sdk
+//    lives (raiz-shim.js imports it directly since Session 5 step 5; the
+//    vendor dist files reach the same real file by normal walk-up, so the
+//    bundle contains a single instance)
+const nodePath = [path.dirname(noirScope), path.join(sdk, "node_modules")].join(path.delimiter);
 const bbBrowser = realpathSync(path.join(sdk, "node_modules", "@aztec", "bb.js", "dest", "browser"));
 const acvmWasm = realpathSync(path.join(noirScope, "acvm_js", "web", "acvm_js_bg.wasm"));
 const abiWasm = realpathSync(path.join(noirScope, "noirc_abi", "web", "noirc_abi_wasm_bg.wasm"));
@@ -81,6 +87,14 @@ const args = [
   "--platform=browser",
   "--target=es2022",
   "--sourcemap",
+  // Session 5 step 5 additions for the RaizChain builders:
+  //  - @stellar/stellar-sdk resolves via its package.json "browser" field to
+  //    the self-contained dist/stellar-sdk.min.js (UMD -> esbuild CJS interop).
+  //  - inject provides the free `Buffer` global the vendor dist modules expect
+  //    (see buffer-inject.js).
+  //  - global=globalThis: defensive; webpack-built UMD sometimes probes it.
+  `--inject:${path.join(here, "buffer-inject.js")}`,
+  "--define:global=globalThis",
   `--outfile=${path.join(proverDir, "dist", "prover.js")}`,
 ];
 console.log(`NODE_PATH=${nodePath}`);

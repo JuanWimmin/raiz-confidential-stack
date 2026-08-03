@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Session 5 step 5: this device family's Android 13 system store (125 roots,
+  security patch 2024-05) lacks "Sectigo Public Server Authentication Root R46"
+  (subject hash 9046744a), the root behind *.stellar.org (friendbot + the
+  soroban-testnet RPC). Conscrypt does no AIA chasing, so Kotlin HTTPS fails
+  with "Trust anchor for certification path not found" while the WebView
+  (Chromium fetches the AIA chain) works — verified 2026-08-03, see
+  friction-report.md. We add the PUBLIC root (fetched from Sectigo's official
+  AIA distribution point, SHA-256 7B:B6:47:A6:2A:EE:AC:88:BF:25:7A:A5:22:D0:
+  1F:FE:A3:95:E0:AB:45:C7:3F:93:F6:56:54:EC:38:F2:5A:06) ON TOP of the system
+  store — additive trust anchors only, no pinning, no system-trust bypass.
+
+  cleartextTrafficPermitted keeps the documented spike fallback usable
+  (http://localhost:4173 via adb reverse) — same intent as the old
+  usesCleartextTraffic manifest attribute this config replaces.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/sectigo_r46" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -356,6 +356,7 @@ solo con la submission ya asegurada y editable.
 Lee CLAUDE.md (la decisión NO-GO está registrada) y docs/
 propuesta_D_indexador_respaldo.md. Raiz Memory ES ahora la submission.
 
+
 1) Reescribe los MUST de CLAUDE.md según la propuesta D §4 y ajusta ESTADO
    ACTUAL: las sesiones 4-7 de wallet se cancelan; las reemplazan: (a) modo
    demo de purga pulido, (b) despliegue público temprano, (c) demo de

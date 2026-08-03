@@ -217,18 +217,32 @@ Sesión 4 (ciclo CT por CLI):    [x]  wrapper CT id: CBWSANZN7YIMA4CWLNSAZO3HSD5
                                      on-chain · envelope sin monto (visibility.mjs) ·
                                      view key k1 (meta) publicada, k0 = custodio ·
                                      eventos del wrapper en /events (8093, run 2)
-Sesión 5 (bridge WebView):      [~]  pasos 1-4 [x]: bridge REAL sirviendo desde
-                                     assets (appassets.androidplatform.net, sin
-                                     dev server) · self-test on-device Vivo Y21:
-                                     register frío 10.8s / caliente 7.3s (1 hilo,
-                                     como predijo el spike) · API: generateProof
-                                     (kind, inputsJson, timeout 90s) con errores
-                                     tipados · bug real: View.post en WebView
-                                     headless nunca corre → Handler(mainLooper)
-                                     (sketch de docs-integration marcado SUPERSEDED)
-                                     · paso 5 (firma+envío Kotlin): EN CURSO
+Sesión 5 (bridge WebView):      [x]  COMPLETA. Pasos 1-4: bridge real desde assets
+                                     (appassets), self-test register 10.8s frío /
+                                     7.3s caliente · bug View.post cazado. Paso 5
+                                     = M1 LOGRADO: desde el teléfono con custodia
+                                     local (ESP + eddsa; Keystore no hace Ed25519):
+                                     register e7f9309a (27.5s) · deposit 10 XLM
+                                     2ff5108e · merge 0dcbefb4 · transfer conf.
+                                     5 XLM→meta 7f9c6f9a (28.6s) — 4/4 SUCCESS,
+                                     WebView solo hace build/simulate sin secretos,
+                                     Kotlin firma (byte-surgery validada vs
+                                     stellar-sdk 14.6.1) y envía. Balance descifrado
+                                     en el teléfono: 50M stroops exactos. Friction:
+                                     Android 13 sin raíz Sectigo R46 de *.stellar.org
+                                     → networkSecurityConfig con raíz pública
+                                     empaquetada (mata a cualquier wallet nativa).
 Sesión 6 (pantallas+integración):[ ]
-Sesión 7 (verify script+recibo):[ ]
+Sesión 7 (verify script+recibo):[x]  verify-goal-total REAL: "Goal total: 50 XLM —
+                                     verified on-chain at ledger 3952632" (k1
+                                     cotejada contra goal_meta Y registro auditor;
+                                     re-commit Pedersen; juez lo corre en ~6 min) ·
+                                     OJO: EL GOAL REAL ES id 1 (id 0 = placeholder
+                                     muerto; k1 real publicada on-chain, tx
+                                     e27b9f1d…) · recibo = disclosure REAL circuito
+                                     D-sender (25 XLM probados, tamper→REJECTED,
+                                     receipt.json committeable) · 10 issue drafts
+                                     en docs/issues-drafts (NO publicados)
 Sesión 8 (hardening+README):    [ ]
 Sesión 9 (video+submission):    [ ]
 Bloqueantes abiertos: ninguno. (Docs de propuestas ya en /docs, 2-ago.)
@@ -242,11 +256,13 @@ Bloqueantes abiertos: ninguno. (Docs de propuestas ya en /docs, 2-ago.)
   y bb.js 0.87 default es threads:1 → todo el demo oficial prueba a 1 hilo aunque
   haya crossOriginIsolated (2-3x regalado; en friction-report). Nuestro shim DEBE
   pasar threads explícito.
-Siguiente paso concreto: Sesión 5 paso 5 (cablear prueba→firma Kotlin→envío,
-  replicando scripts/ct-flow con el wrapper propio CBWSANZN…) — agente en curso.
-  Después: Sesión 6 (las tres pantallas + timeline vía Raiz Memory con URL
-  configurable) y Sesión 7 (verify-goal-total + recibo). Ajuste pendiente de
-  README (Sesión 8): matiz de la view key publicada (audita aporte por aporte).
+Siguiente paso concreto: Sesión 6 (las tres pantallas + timeline vía Raiz Memory
+  con URL configurable + ensayo grabado) — todo el backend de la app ya existe
+  (bridge, firma, envío, balance descifrado). El goal REAL es id 1 en goal_meta.
+  La cuenta de la app ya tiene 5 XLM confidenciales aportados a la meta
+  (pendientes de Cosecha — material de demo listo). Después: Sesión 8 (hardening,
+  README con el matiz de la view key, despliegue público — falta respuesta de
+  Juancho: ¿VM o túnel?).
 ```
 
 ## Documentos de referencia en /docs
