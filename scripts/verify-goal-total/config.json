@@ -1,0 +1,14 @@
+{
+  "_what": "Defaults documenting the Sobre del Barrio testnet deployment. Everything in this file is PUBLIC ON PURPOSE - including viewKeySecretHex: publishing the goal's auditor view key is the point of the design ('the fund is glass'). The custodian key (auditor id 0) is NOT here and stays private.",
+  "network": "testnet",
+  "rpcUrl": "https://soroban-testnet.stellar.org",
+  "passphrase": "Test SDF Network ; September 2015",
+  "token": "CBWSANZN7YIMA4CWLNSAZO3HSD5NZDC2GZQJ434MOPQR7RDNVYQSDHAT",
+  "verifier": "CBFCYFND44SNQPKMQNHB3KX2C7K4U5WSVUMFJY34OV46YAN2SACM3UIA",
+  "auditor": "CBUSX5B56KB73FAAIIHW7ISSZEGHDKQTOWML74LBPOWWGCEFEZPLHE25",
+  "goalAccount": "GAJPXAL725N44NMEZ3XIN66ZJ7XURJNLXIDGIOOR7D3E23DIRGLIM73X",
+  "viewKeySecretHex": "0x0066c14835195705220b7be6f1146aec9cecfb6ecb2b6667bd1d234234afdb16",
+  "deployedAtLedger": 3950128,
+  "goalMeta": "CBNVY2AAHA4SP3MX4XKJAZGS63SF4GIFNHUAAQPRSKYAXY3XR6HKIQAZ",
+  "goalMetaGoalId": 1
+}
