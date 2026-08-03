@@ -1,0 +1,29 @@
+[package]
+name = "goal-meta"
+version = "0.1.0"
+edition = "2021"
+description = "Community goal registry for Sobre del Barrio: goal metadata, published auditor view keys, harvest timeline. Amounts never touch this contract — they live encrypted in the CT wrapper."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+# Match the RAÍZ workspace version (22.x today; bump together with the F1 migration to 26.x).
+# KNOWN FIX (verified 2026-08-02): a transitive pull of ed25519-dalek 3.0 breaks
+# soroban-env-host. The shipped Cargo.lock pins it; if you regenerate the lockfile, run:
+#   cargo update -p ed25519-dalek@3.0.0 --precise 2.2.0
+[dependencies]
+soroban-sdk = "22"
+
+[dev-dependencies]
+soroban-sdk = { version = "22", features = ["testutils"] }
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true

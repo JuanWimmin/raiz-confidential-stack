@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo tree:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git show:*)",
+      "Bash(stellar contract build:*)",
+      "Bash(stellar contract info:*)",
+      "Bash(stellar network:*)",
+      "Bash(curl https://soroban-testnet.stellar.org:*)",
+      "Bash(curl https://friendbot.stellar.org:*)",
+      "PowerShell(cargo check:*)",
+      "PowerShell(cargo test:*)",
+      "PowerShell(cargo build:*)",
+      "PowerShell(cargo fmt:*)",
+      "PowerShell(cargo clippy:*)",
+      "PowerShell(git status:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git log:*)",
+      "PowerShell(git add:*)",
+      "WebFetch(domain:stellar.org)",
+      "WebFetch(domain:developers.stellar.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ],
+    "deny": [
+      "Edit(./vendor/**)",
+      "Write(./vendor/**)",
+      "Edit(./contracts/goal-meta/Cargo.lock)"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+# Rust
+target/
+
+# Databases (raiz-memory SQLite)
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets / env
+.env
+.env.deploy
+
+# Vendor reference clones (read-only, never committed)
+/vendor/
+
+# Android
+build/
+.gradle/
+local.properties
+*.keystore
+
+# Node
+node_modules/
+
+# Misc
+*.log
+.claude/settings.local.json

@@ -1,0 +1,14 @@
+services:
+  raiz-memory:
+    build: .
+    ports:
+      - "8090:8090"
+    env_file: .env
+    volumes:
+      - raiz_memory_data:/data
+    environment:
+      DATABASE_URL: sqlite:///data/raiz_memory.db?mode=rwc
+    restart: unless-stopped
+
+volumes:
+  raiz_memory_data:
