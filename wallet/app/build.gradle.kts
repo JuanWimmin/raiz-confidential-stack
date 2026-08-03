@@ -15,21 +15,12 @@ android {
         versionName = "0.1-spike"
 
         // ------------------------------------------------------------------
-        // DEMO_URL — the ONLY knob of this harness. Edit it here and rebuild.
-        //
-        // Default: http://localhost:3000 + `adb reverse tcp:3000 tcp:3000`
-        //   -> localhost IS a secure context, so with the demo's COOP/COEP
-        //      headers crossOriginIsolated becomes true = multithreaded bb.js.
-        //      (Cleanest option per docs/spike-findings.md.)
-        //
-        // Alternative (no USB): your PC's LAN IP, e.g. "http://192.168.0.104:3000"
-        //   (IP of 2026-08-02 — re-check with ipconfig). WORKS, but plain-http
-        //   LAN origins are NOT secure contexts -> crossOriginIsolated stays
-        //   false -> bb.js silently drops to 1 thread. Measure it as the
-        //   degraded configuration, don't read it as a hard failure.
+        // DEMO_URL — Session 1 spike leftover, kept as the documented interim
+        // fallback: if WebViewAssetLoader ever fights us, the bridge can be
+        // pointed at scripts/prover-bench's server (node serve.mjs + adb
+        // reverse tcp:4173 tcp:4173). Session 5 default is the asset loader
+        // (see ProverWebViewBridge.ENTRY_URL); this URL is otherwise unused.
         // ------------------------------------------------------------------
-        // Spike measurement targets: :4173 = scripts/prover-bench (proving only,
-        // no Freighter — what we actually time) · :3000 = full CT demo app.
         buildConfigField("String", "DEMO_URL", "\"http://localhost:4173\"")
     }
 
@@ -53,5 +44,12 @@ android {
     }
 }
 
-// Intentionally ZERO dependencies beyond the Kotlin stdlib: the spike harness is a
-// plain Activity + WebView. AndroidX/coroutines arrive in Session 5 with the bridge.
+dependencies {
+    // Session 5 bridge:
+    //  - webkit: WebViewAssetLoader — serves assets/prover/* on the secure
+    //    https://appassets.androidplatform.net origin (no dev server).
+    //    1.12.1 = last release aligned with compileSdk 35 (newer ones want 36).
+    //  - coroutines: suspend generateProof/selftest with withTimeout(90s).
+    implementation("androidx.webkit:webkit:1.12.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2") // cached locally 2026-08-02
+}

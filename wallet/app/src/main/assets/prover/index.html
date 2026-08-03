@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RaizProver host page</title>
+  <!--
+    Headless host page for the CT proving bundle, loaded by ProverWebViewBridge
+    from https://appassets.androidplatform.net/prover/index.html (WebViewAssetLoader).
+    Never shown to the user in the app; the visible text below only helps when
+    a developer opens it manually in a browser.
+
+    ./dist/prover.js is GENERATED — run: node wallet/tools/build-prover-assets.mjs
+  -->
+</head>
+<body>
+  <p style="font-family: monospace">
+    RaizProver host page — headless proving surface for the Sobre del Barrio
+    bridge. Open the console: <code>window.RaizProver.selftest()</code>.
+  </p>
+  <script>
+    // Surface load-time failures to Kotlin (typed NotReady) and to logcat via
+    // the console. Module-script errors land on window.onerror; a missing
+    // bundle file lands on the script tag's onerror below.
+    (function () {
+      function report(msg) {
+        console.error("[RaizProver:init] " + msg);
+        try {
+          if (window.AndroidBridge && window.AndroidBridge.onProverInitError) {
+            window.AndroidBridge.onProverInitError(String(msg));
+          }
+        } catch (e) { /* not running inside the app */ }
+      }
+      window.__raizReport = report;
+      window.addEventListener("error", function (e) {
+        report(e.message + " (" + e.filename + ":" + e.lineno + ")");
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        // Proof-call rejections are handled per-call by the bridge; this only
+        // catches stray ones (e.g. failures during module top-level init).
+        console.error("[RaizProver] unhandledrejection: " + String(e.reason));
+      });
+    })();
+  </script>
+  <script type="module" src="./dist/prover.js"
+          onerror="window.__raizReport('failed to load dist/prover.js — generated assets missing? run: node wallet/tools/build-prover-assets.mjs')"></script>
+</body>
+</html>

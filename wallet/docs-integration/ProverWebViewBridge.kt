@@ -1,3 +1,10 @@
+// ⚠️ SUPERSEDED (2026-08-03): the real implementation lives at
+// wallet/app/src/main/java/xyz/raiz/sobre/prover/ProverWebViewBridge.kt.
+// This sketch is kept as the historical design doc, but note one KNOWN BUG in
+// it: View.post() on a never-attached headless WebView queues runnables until
+// window-attach — i.e. forever — so evaluateJavascript never runs. The real
+// bridge posts through Handler(Looper.getMainLooper()) instead.
+// See friction-report.md entry [2026-08-03 12:47].
 package xyz.raiz.sobre.prover
 
 import android.annotation.SuppressLint

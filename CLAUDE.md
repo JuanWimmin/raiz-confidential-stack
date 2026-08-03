@@ -86,6 +86,15 @@ COULD (solo si sobra tiempo): withdraw completo · segunda meta · métricas.
   circuits/ Noir; docs/ incluye INDEXER.md y SELECTIVE_DISCLOSURE.md, leer antes
   de Sesiones 2/4/7). OJO: el demo consume la rama
   feat/confidential-verifier-ultrahonk de stellar-contracts como git dep.
+  **View keys — realidad verificada (Sesión 4, 3-ago, con llamadas reales):**
+  la preview NO tiene view keys por cuenta; la unidad es el auditor_id del
+  contrato auditor (registro admin-gated). Nuestra k1 publicada (auditor de la
+  meta) descifra el monto de CADA aporte entrante a la meta (canal receptor),
+  no solo el total; NO abre el canal del emisor (el balance de Marta sigue
+  privado). Implicación de pitch: el sobre del aportante es secreto y su
+  balance es privado, pero quien tenga la view key publicada puede auditar
+  aporte por aporte — "el fondo es de vidrio" es literal. El README debe
+  decirlo sin ambigüedad (candidato a ajuste de una línea del lema).
   **Spike prep (2-ago, código leído con evidencia — docs/spike-findings.md):**
   deposit y merge NO llevan prueba ZK (solo register/transfer/withdraw). Proving
   separable de la firma: seam Signer {publicKey, sign(txXdr)} en el SDK del demo;
@@ -194,9 +203,30 @@ Sesión 2 (raiz-memory vivo):    [x]  contratos indexados: CBF64DEO…5N3F (CT w
                                      comentario fechado en rpc.rs) · paginación por
                                      cursor y /coverage verificados contra sqlite ·
                                      4 tests offline · flag RETENTION_SIMULATION_LEDGERS
-Sesión 3 (goal_meta testnet):   [ ]  contract id: ______
-Sesión 4 (ciclo CT por CLI):    [ ]  wrapper CT id: ______
-Sesión 5 (bridge WebView):      [ ]
+Sesión 3 (goal_meta testnet):   [x]  contract id: CBNVY2AAHA4SP3MX4XKJAZGS63SF4GIFNHUAAQPRSKYAXY3XR6HKIQAZ
+                                     13/13 tests · TTL 518400 (~30d) verificado
+                                     contra config real · goal-flow.sh corrido 2x ·
+                                     PRIMERA SINERGIA: harvest event visto en
+                                     /events de raiz-memory (ledger 3950288)
+Sesión 4 (ciclo CT por CLI):    [x]  wrapper CT id: CBWSANZN7YIMA4CWLNSAZO3HSD5NZDC2GZQJ434MOPQR7RDNVYQSDHAT
+                                     (PROPIO — auditor oficial admin-gated, Error
+                                     #2000 probado; verifier CBFCYFND… · auditor
+                                     CBUSX5B5…) · ciclo completo real: register×2 →
+                                     deposit 100 → transfer conf. 25 → merge →
+                                     balance meta descifrado 25 XLM == commitments
+                                     on-chain · envelope sin monto (visibility.mjs) ·
+                                     view key k1 (meta) publicada, k0 = custodio ·
+                                     eventos del wrapper en /events (8093, run 2)
+Sesión 5 (bridge WebView):      [~]  pasos 1-4 [x]: bridge REAL sirviendo desde
+                                     assets (appassets.androidplatform.net, sin
+                                     dev server) · self-test on-device Vivo Y21:
+                                     register frío 10.8s / caliente 7.3s (1 hilo,
+                                     como predijo el spike) · API: generateProof
+                                     (kind, inputsJson, timeout 90s) con errores
+                                     tipados · bug real: View.post en WebView
+                                     headless nunca corre → Handler(mainLooper)
+                                     (sketch de docs-integration marcado SUPERSEDED)
+                                     · paso 5 (firma+envío Kotlin): EN CURSO
 Sesión 6 (pantallas+integración):[ ]
 Sesión 7 (verify script+recibo):[ ]
 Sesión 8 (hardening+README):    [ ]
@@ -212,11 +242,11 @@ Bloqueantes abiertos: ninguno. (Docs de propuestas ya en /docs, 2-ago.)
   y bb.js 0.87 default es threads:1 → todo el demo oficial prueba a 1 hilo aunque
   haya crossOriginIsolated (2-3x regalado; en friction-report). Nuestro shim DEBE
   pasar threads explícito.
-Siguiente paso concreto: día 1 del plan — Sesión 3 (goal_meta a testnet, empezar
-  en modo plan; ahí se endurece la suite: hoy solo trae 1 test) y Sesión 4 (ciclo
-  CT completo por CLI). La Sesión 5 queda desbloqueada por el GO; su shim debe
-  pasar threads explícito a bb.js y presupuestar ~10-16 s de proving en WebView.
-  Plugin stellar-dev instalado (7 skills oficiales) — disponible al reiniciar sesión.
+Siguiente paso concreto: Sesión 5 paso 5 (cablear prueba→firma Kotlin→envío,
+  replicando scripts/ct-flow con el wrapper propio CBWSANZN…) — agente en curso.
+  Después: Sesión 6 (las tres pantallas + timeline vía Raiz Memory con URL
+  configurable) y Sesión 7 (verify-goal-total + recibo). Ajuste pendiente de
+  README (Sesión 8): matiz de la view key publicada (audita aporte por aporte).
 ```
 
 ## Documentos de referencia en /docs

@@ -4,6 +4,14 @@ build/
 local.properties
 .kotlin/
 
+# Generated prover assets (~13 MB copied from /vendor + esbuild output).
+# raiz-shim.js and index.html in the same dir ARE committed sources.
+# Regenerate with:  node wallet/tools/build-prover-assets.mjs
+app/src/main/assets/prover/dist/
+app/src/main/assets/prover/vendor/
+app/src/main/assets/prover/wasm/
+app/src/main/assets/prover/circuits/
+
 # IDE
 .idea/
 *.iml
