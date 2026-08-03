@@ -29,6 +29,7 @@ pub async fn init(url: &str) -> anyhow::Result<SqlitePool> {
     Ok(pool)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_event(
     pool: &SqlitePool,
     id: &str,
@@ -38,12 +39,14 @@ pub async fn insert_event(
     topics_json: &str,
     value_xdr: &str,
     closed_at: Option<&str>,
+    in_successful: bool,
 ) -> anyhow::Result<()> {
     sqlx::query(
-        "INSERT OR IGNORE INTO events (id, contract_id, ledger, tx_hash, topics_json, value_xdr, ledger_closed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT OR IGNORE INTO events (id, contract_id, ledger, tx_hash, topics_json, value_xdr, ledger_closed_at, in_successful_tx)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id).bind(contract_id).bind(ledger).bind(tx_hash).bind(topics_json).bind(value_xdr).bind(closed_at)
+    .bind(if in_successful { 1i64 } else { 0i64 })
     .execute(pool)
     .await?;
     Ok(())
@@ -111,14 +114,18 @@ pub async fn events(
     start_ledger: Option<i64>,
     cursor: Option<&str>,
     limit: i64,
+    // Purge-demo mode (see main.rs): when Some, pretend nothing before this
+    // ledger exists. None → identical behavior to before the flag existed.
+    retention_floor: Option<i64>,
 ) -> anyhow::Result<(Vec<Value>, Option<String>, i64)> {
+    let floor = retention_floor.unwrap_or(0);
     // Cursor pagination: event ids sort lexicographically in emission order (RPC paging tokens).
     let rows = match cursor {
         Some(c) => {
             sqlx::query(
-                "SELECT * FROM events WHERE contract_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
+                "SELECT * FROM events WHERE contract_id = ? AND id > ? AND ledger >= ? ORDER BY id ASC LIMIT ?",
             )
-            .bind(contract_id).bind(c).bind(limit)
+            .bind(contract_id).bind(c).bind(floor).bind(limit)
             .fetch_all(pool)
             .await?
         }
@@ -126,7 +133,7 @@ pub async fn events(
             sqlx::query(
                 "SELECT * FROM events WHERE contract_id = ? AND ledger >= ? ORDER BY id ASC LIMIT ?",
             )
-            .bind(contract_id).bind(start_ledger.unwrap_or(0)).bind(limit)
+            .bind(contract_id).bind(start_ledger.unwrap_or(0).max(floor)).bind(limit)
             .fetch_all(pool)
             .await?
         }
@@ -136,11 +143,17 @@ pub async fn events(
     let events = rows
         .iter()
         .map(|r| {
+            // Field names mirror the live RPC's getEvents events (verified
+            // 2026-08-02): type/ledger/ledgerClosedAt/contractId/id/txHash/
+            // inSuccessfulContractCall/topic/value. We don't store
+            // operationIndex/transactionIndex (not needed by any consumer yet).
             json!({
+                "type": "contract",
                 "id": r.get::<String, _>("id"),
                 "contractId": r.get::<String, _>("contract_id"),
                 "ledger": r.get::<i64, _>("ledger"),
                 "txHash": r.get::<Option<String>, _>("tx_hash"),
+                "inSuccessfulContractCall": r.get::<Option<i64>, _>("in_successful_tx").unwrap_or(1) != 0,
                 "topic": serde_json::from_str::<Value>(&r.get::<String, _>("topics_json")).unwrap_or(json!([])),
                 "value": r.get::<String, _>("value_xdr"),
                 "ledgerClosedAt": r.get::<Option<String>, _>("ledger_closed_at"),

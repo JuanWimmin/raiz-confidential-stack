@@ -22,7 +22,9 @@ pub async fn run(pool: SqlitePool, rpc_url: String, contract_id: String, poll_se
     }
 }
 
-async fn tick(pool: &SqlitePool, rpc: &RpcClient, contract_id: &str) -> anyhow::Result<()> {
+// pub(crate) so the integration tests (src/tests.rs) can drive single ingest
+// batches deterministically against a mock RPC — `run` itself never returns.
+pub(crate) async fn tick(pool: &SqlitePool, rpc: &RpcClient, contract_id: &str) -> anyhow::Result<()> {
     let (cursor, last_ledger) = db::get_cursor(pool, contract_id).await?;
 
     // First run: start at the current ledger (the RPC rejects startLedger outside
@@ -43,9 +45,16 @@ async fn tick(pool: &SqlitePool, rpc: &RpcClient, contract_id: &str) -> anyhow::
 
         for ev in &page.events {
             let topics = serde_json::to_string(&ev.topic)?;
+            // Live RPC (verified 2026-08-02) sends a plain base64 string; older
+            // builds wrapped it as {"xdr": "..."} — unwrap that, don't store the
+            // JSON object as if it were XDR.
             let value = match &ev.value {
                 serde_json::Value::String(s) => s.clone(),
-                other => other.to_string(), // older RPC shape: {"xdr": "..."}
+                other => other
+                    .get("xdr")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| other.to_string()),
             };
             db::insert_event(
                 pool,
@@ -56,19 +65,38 @@ async fn tick(pool: &SqlitePool, rpc: &RpcClient, contract_id: &str) -> anyhow::
                 &topics,
                 &value,
                 ev.ledger_closed_at.as_deref(),
+                ev.in_successful_contract_call,
             )
             .await?;
         }
 
         let next = page.cursor.or(page.paging_token);
-        let scanned_through = page.events.last().map(|e| e.ledger).unwrap_or(page.latest_ledger);
+        // Honest coverage: `latestLedger` is the chain head, not how far this scan
+        // got (each call scans ~10k ledgers). The scanned position lives in the
+        // cursor's TOID; fall back to the last event's ledger.
+        let scanned_through = next
+            .as_deref()
+            .and_then(crate::rpc::cursor_ledger)
+            .or_else(|| page.events.last().map(|e| e.ledger))
+            .unwrap_or(0);
         if let Some(c) = &next {
             db::set_cursor(pool, contract_id, c, scanned_through.max(1)).await?;
         }
+        let prev = cursor;
         cursor = next;
 
-        if n < PAGE_LIMIT as usize {
-            break; // caught up; wait for the next poll
+        // Caught up when the cursor's scan position reaches the chain head: the
+        // live RPC caps each call at ~10k ledgers and returns an advanced cursor
+        // even for empty pages (verified 2026-08-02), so an empty page mid-window
+        // must NOT end the loop. Older RPCs whose cursors we can't decode fall
+        // back to page-fullness; a cursor that stops advancing always ends the
+        // loop so a quirky RPC can't spin us hot.
+        let caught_up = match cursor.as_deref().and_then(crate::rpc::cursor_ledger) {
+            Some(scanned) if page.latest_ledger > 0 => scanned >= page.latest_ledger,
+            _ => n < PAGE_LIMIT as usize,
+        };
+        if caught_up || cursor == prev {
+            break; // wait for the next poll
         }
     }
     Ok(())
