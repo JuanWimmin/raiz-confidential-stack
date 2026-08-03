@@ -86,6 +86,20 @@ COULD (solo si sobra tiempo): withdraw completo · segunda meta · métricas.
   circuits/ Noir; docs/ incluye INDEXER.md y SELECTIVE_DISCLOSURE.md, leer antes
   de Sesiones 2/4/7). OJO: el demo consume la rama
   feat/confidential-verifier-ultrahonk de stellar-contracts como git dep.
+  **Spike prep (2-ago, código leído con evidencia — docs/spike-findings.md):**
+  deposit y merge NO llevan prueba ZK (solo register/transfer/withdraw). Proving
+  separable de la firma: seam Signer {publicKey, sign(txXdr)} en el SDK del demo;
+  Freighter es solo un adapter — Kotlin puede firmar (valida la decisión
+  WebView+Keystore). Sin crossOriginIsolated, bb.js cae a 1 hilo con gracia
+  (lento, NO roto) — el árbol de degradación tiene un peldaño intermedio. El dev
+  server del demo YA manda COOP same-origin + COEP credentialless; el límite
+  real en teléfono es el secure context: http://LAN-IP = 1 hilo · adb reverse +
+  localhost = multihilo. Ids testnet del demo (deployment.ts, verificados con
+  getEvents): wrapper CT CBF64DEOVQAXJFBSNGFEUT2AH4H7K5JBY3ZYJ5GVEINMNSDISWRG5N3F
+  (46 eventos en ventana) · verifier CDCET36P… · auditor CA4II62E… · factory
+  CDX4DBNW… (los 3 sin eventos aún) · SAC XLM CDLZFC3S…. deployedAtLedger
+  3013364 — ANTERIOR al piso de retención actual (~3819905): el propio demo
+  oficial ya perdió su historial temprano en el RPC. Eso ES nuestro pitch.
 - **SPP (Nethermind):** privacy pool (oculta montos Y contrapartes), Circom+Groth16,
   PoC de un circuito 2-in/2-out, sin auditar. Su README confiesa la retención de
   ~7 días de eventos del RPC — la razón de ser de Raiz Memory. Repo:
@@ -162,8 +176,16 @@ Sesión 0 (setup repo):          [x]  /vendor poblado (3 repos, SHAs en Hechos v
                                      raiz-memory cargo check OK (0 warnings) ·
                                      goal-meta cargo test OK (1/1, dalek 2.2.0 pinned) ·
                                      URLs CT verificadas · .claude (2 agentes, 5 skills) · git init
-Sesión 1 (spike proving):       [ ]  tiempos medidos: ______
-Sesión 2 (raiz-memory vivo):    [ ]  contratos indexados: ______
+Sesión 1 (spike proving):       [~]  prep lista: spike-findings.md · wallet/ APK
+                                     compila (assembleDebug 39s) · falta MEDIR en
+                                     teléfono → tiempos medidos: ______
+Sesión 2 (raiz-memory vivo):    [x]  contratos indexados: CBF64DEO…5N3F (CT wrapper
+                                     demo, 46 ev) + CCUUDM434…MCGZ (SPP EURC pool,
+                                     3584 ev) = 3630 eventos reales · forma real
+                                     getEvents verificada y corregida (6 mismatches,
+                                     comentario fechado en rpc.rs) · paginación por
+                                     cursor y /coverage verificados contra sqlite ·
+                                     4 tests offline · flag RETENTION_SIMULATION_LEDGERS
 Sesión 3 (goal_meta testnet):   [ ]  contract id: ______
 Sesión 4 (ciclo CT por CLI):    [ ]  wrapper CT id: ______
 Sesión 5 (bridge WebView):      [ ]
@@ -171,15 +193,16 @@ Sesión 6 (pantallas+integración):[ ]
 Sesión 7 (verify script+recibo):[ ]
 Sesión 8 (hardening+README):    [ ]
 Sesión 9 (video+submission):    [ ]
-Bloqueantes abiertos: faltan en /docs los documentos propuesta_A_sobre_del_barrio.md,
-  propuesta_D_indexador_respaldo.md y evaluacion_bounty_privacy_stellar_summit.md —
-  NO estaban en ~/Downloads; exportarlos de la conversación de planeación de
-  claude.ai (las Sesiones 3, 7 y 9 citan sus secciones §4/§8/§9/§10).
-  No bloquea las Sesiones 1 y 2.
-Siguiente paso concreto: Sesión 1 (spike proving — requiere teléfono + humano) y
-  Sesión 2 (raiz-memory contra testnet real) en paralelo. Deuda anotada para la
-  Sesión 3: goal_meta solo trae 1 test (create_and_read_goal); ahí se endurece
-  la suite completa. Arrancar con: /sesion 1 o /sesion 2.
+Bloqueantes abiertos: ninguno. (Docs de propuestas ya en /docs, 2-ago.)
+  Nota Fase 1 del spike: Chrome Android NO instala extensiones → el flujo completo
+  del demo (que firma con Freighter) no corre tal cual en el teléfono; lo que se
+  mide es el PROVING (separable, confirmado en código). Bench standalone de
+  proving en /scripts/prover-bench (en preparación) para medir sin Freighter.
+Siguiente paso concreto: Juancho corre el spike en el teléfono (runbook en
+  docs/spike-findings.md §How to serve on LAN + mensaje de Claude): medir prueba
+  de register y transfer, ambas configs (LAN 1-hilo y adb-reverse multihilo),
+  pegar tiempos/errores → registrar en SPIKE_DIA0.md y decidir GO/GO parcial/NO-GO.
+  Deuda para Sesión 3: goal_meta solo trae 1 test; ahí se endurece la suite.
 ```
 
 ## Documentos de referencia en /docs
