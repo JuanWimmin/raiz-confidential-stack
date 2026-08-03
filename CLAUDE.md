@@ -196,8 +196,14 @@ Sesión 9 (video+submission):    [ ]
 Bloqueantes abiertos: ninguno. (Docs de propuestas ya en /docs, 2-ago.)
   Nota Fase 1 del spike: Chrome Android NO instala extensiones → el flujo completo
   del demo (que firma con Freighter) no corre tal cual en el teléfono; lo que se
-  mide es el PROVING (separable, confirmado en código). Bench standalone de
-  proving en /scripts/prover-bench (en preparación) para medir sin Freighter.
+  mide es el PROVING (separable, confirmado en código). Bench standalone SIN
+  Freighter: /scripts/prover-bench (node serve.mjs → puerto 4173). Baseline Node
+  en el PC (22 hilos/1 hilo): register 1.4s/2.7s · withdraw 1.7s/5.1s ·
+  transfer 1.8s/5.2s — pruebas de 14.6 KB, verificadas.
+  OJO para Sesión 5: el CircuitProver del demo crea UltraHonkBackend SIN opciones
+  y bb.js 0.87 default es threads:1 → todo el demo oficial prueba a 1 hilo aunque
+  haya crossOriginIsolated (2-3x regalado; en friction-report). Nuestro shim DEBE
+  pasar threads explícito.
 Siguiente paso concreto: Juancho corre el spike en el teléfono (runbook en
   docs/spike-findings.md §How to serve on LAN + mensaje de Claude): medir prueba
   de register y transfer, ambas configs (LAN 1-hilo y adb-reverse multihilo),

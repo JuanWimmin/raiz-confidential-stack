@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CT prover bench</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; padding: 16px; background: #101418; color: #e8edf2;
+      font-family: system-ui, sans-serif; font-size: 18px; line-height: 1.45;
+    }
+    h1 { font-size: 22px; margin: 0 0 12px; }
+    #env {
+      background: #1a2129; border: 1px solid #2c3844; border-radius: 10px;
+      padding: 12px; margin-bottom: 14px; font-size: 17px; word-break: break-word;
+    }
+    #env .ua { color: #8fa0b0; font-size: 13px; }
+    .warn { color: #ffcc66; }
+    .buttons { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+    button {
+      font-size: 20px; padding: 16px; border-radius: 10px; border: 1px solid #3a4a5a;
+      background: #22303e; color: #e8edf2; text-align: left;
+    }
+    button:disabled { opacity: 0.45; }
+    #status { margin-bottom: 12px; color: #9fd58a; min-height: 1.4em; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 14px; }
+    th, td { border: 1px solid #2c3844; padding: 8px 10px; text-align: right; font-size: 16px; }
+    th:nth-child(2), td:nth-child(2) { text-align: left; }
+    tr.err td { color: #ff8080; }
+    #log { font-family: ui-monospace, monospace; font-size: 13px; color: #8fa0b0;
+           word-break: break-word; }
+    #log .err { color: #ff8080; }
+  </style>
+</head>
+<body>
+  <h1>Confidential Token prover bench</h1>
+  <div id="env">loading environment...</div>
+  <div class="buttons">
+    <button data-circuit="register">Run register proof</button>
+    <button data-circuit="transfer">Run transfer proof</button>
+    <button data-circuit="withdraw">Run withdraw proof</button>
+  </div>
+  <div id="status">idle</div>
+  <table>
+    <thead>
+      <tr><th>run #</th><th>circuit</th><th>witness ms</th><th>prove ms</th><th>total ms</th><th>proof</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+  <div id="log"></div>
+  <script type="module" src="/dist/bench.js"></script>
+</body>
+</html>
