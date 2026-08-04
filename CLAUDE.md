@@ -243,7 +243,18 @@ Sesión 7 (verify script+recibo):[x]  verify-goal-total REAL: "Goal total: 50 XL
                                      D-sender (25 XLM probados, tamper→REJECTED,
                                      receipt.json committeable) · 10 issue drafts
                                      en docs/issues-drafts (NO publicados)
-Sesión 8 (hardening+README):    [ ]
+Sesión 8 (hardening+README):    [~]  README reescrito con datos reales (el agente
+                                     quitó 13 afirmaciones que el código NO
+                                     sostenía — ver commit 886e762) · BACKFILL
+                                     implementado (era defecto de MUST: clon nuevo
+                                     indexaba VACÍO; ahora 3,622 eventos desde cero,
+                                     con clamp honesto que registra 824,961 ledgers
+                                     inalcanzables) · 3 bugs de Docker arreglados
+                                     (Cargo.lock, imagen vieja, PORT vs mapeo) ·
+                                     despliegue público = TÚNEL cloudflared (Juancho
+                                     no tiene VM): scripts/serve-public.ps1 ·
+                                     FALTA: publicar issues (requiere OK de Juancho),
+                                     ensayo cronometrado final
 Sesión 9 (video+submission):    [ ]
 Bloqueantes abiertos: ninguno. (Docs de propuestas ya en /docs, 2-ago.)
   Nota Fase 1 del spike: Chrome Android NO instala extensiones → el flujo completo
@@ -256,13 +267,16 @@ Bloqueantes abiertos: ninguno. (Docs de propuestas ya en /docs, 2-ago.)
   y bb.js 0.87 default es threads:1 → todo el demo oficial prueba a 1 hilo aunque
   haya crossOriginIsolated (2-3x regalado; en friction-report). Nuestro shim DEBE
   pasar threads explícito.
-Siguiente paso concreto: Sesión 6 (las tres pantallas + timeline vía Raiz Memory
-  con URL configurable + ensayo grabado) — todo el backend de la app ya existe
-  (bridge, firma, envío, balance descifrado). El goal REAL es id 1 en goal_meta.
-  La cuenta de la app ya tiene 5 XLM confidenciales aportados a la meta
-  (pendientes de Cosecha — material de demo listo). Después: Sesión 8 (hardening,
-  README con el matiz de la view key, despliegue público — falta respuesta de
-  Juancho: ¿VM o túnel?).
+Siguiente paso concreto: terminar Sesión 6 (workflow reanudado tras corte por
+  límite de sesión: tema+componentes de RAÍZ y capa de datos YA en el árbol y
+  compilando; faltan goal-total en la app, las 3 pantallas y el ensayo). Luego
+  Sesión 9 (video 2:30 + submission antes del mediodía del 6).
+  DECISIÓN PENDIENTE DE JUANCHO: publicar o no los 10 issue drafts de
+  docs/issues-drafts/ en los repos de OZ/Nethermind/Stellar (Sesión 8 paso 4
+  exige su OK explícito, uno por uno).
+  OJO al renombrar applicationId a xyz.raiz.sobre: borra EncryptedSharedPreferences,
+  así que el teléfono necesita "Abrir mi sobre" (register) de nuevo — es un beat
+  del video, no un bug.
 ```
 
 ## Documentos de referencia en /docs
