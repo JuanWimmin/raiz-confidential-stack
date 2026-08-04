@@ -129,7 +129,7 @@ remembers.
 | **Repository** (required) | `https://github.com/JuanWimmin/raiz-confidential-stack` |
 | **Release / installable APK** | `https://github.com/JuanWimmin/raiz-confidential-stack/releases/tag/v0.1.0-summit` |
 | **Demo video** | `<<< PASTE VIDEO URL HERE AFTER RECORDING >>>` |
-| **Landing page** | `https://github.com/JuanWimmin/raiz-confidential-stack/tree/main/web` |
+| **Landing page** | `https://raizapp.xyz/sobre.html` |
 
 Notes to paste alongside, if the form has room for them:
 
@@ -139,10 +139,12 @@ Notes to paste alongside, if the form has room for them:
   at `http://localhost:8091`, so either run the indexer and `adb reverse tcp:8091
   tcp:8091`, or paste any reachable base URL into **⋮ → Ajustes → Fuente de eventos**.
   Full instructions on the release page.
-- **Landing page:** `web/index.html` is a single self-contained file with no build step;
-  it is **not deployed to a public URL yet**. Preview locally with `node web/serve.mjs`
-  (http://localhost:4180). If it goes up before submission, replace the repo path above
-  with the real URL and set `YT_ID` in `web/index.html`.
+- **Landing page:** live at <https://raizapp.xyz/sobre.html>, served from the team's
+  existing GitHub Pages site (`JuanWimmin/JuanWimmin.github.io`), so it does not depend
+  on the laptop this was built on. Source is `web/index.html` in the repo — one
+  self-contained file, no build step. **Still to do before sending:** set `YT_ID` in
+  both copies once the video is up, so the page embeds it instead of showing the
+  placeholder.
 - **Public Raiz Memory instance:** an ephemeral cloudflared quick tunnel
   (`scripts/serve-public.ps1`) — the hostname changes on every start, so no permanent
   URL is promised. The reproducible route is the container in `docs/deploy-public.md`.

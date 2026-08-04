@@ -38,16 +38,23 @@ To publish: set the id near the bottom of the file.
 const YT_ID = 'xxxxxxxxxxx';   // just the id, not the full URL
 ```
 
-## Deploying
+## Where it is deployed
 
-Copy `index.html` wherever the RAÍZ site is served from. It is standalone, so
-any of these work:
+**Live at <https://raizapp.xyz/sobre.html>.**
 
-- drop it next to the current landing (e.g. `raizapp.xyz/sobre/index.html`)
-- serve the folder from any static host
-- GitHub Pages from this repo
+It is served from the team's existing GitHub Pages site, the repo
+`JuanWimmin/JuanWimmin.github.io`, where `index.html` (the RAÍZ landing),
+`pitch.html` and `verificar-residente.html` already live. Publishing was a copy
+of this file to `sobre.html` in that repo plus one edit to `og:url` — no
+existing file was touched, and there is no build step on either side.
 
-Update `og:url` in the `<head>` to the final address so link previews resolve.
+**To update it:** edit `index.html` here, copy it over `sobre.html` there, keep
+the `og:url` pointing at `https://raizapp.xyz/sobre.html`, and push. GitHub
+Pages picks it up in well under a minute.
+
+The page is standalone, so any static host would do equally well; this one was
+chosen because it lives under the team's own domain and outlives the machine
+this was built on.
 
 ## Local preview
 
