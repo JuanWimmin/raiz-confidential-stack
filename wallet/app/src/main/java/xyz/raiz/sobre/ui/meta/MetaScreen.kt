@@ -279,7 +279,10 @@ private fun TotalHero(state: MetaUiState, onVerifyTotal: () -> Unit) {
                     color = RaizError,
                 )
                 Text(
-                    text = "No mostramos el número: ${total.message}",
+                    // The message is self-contained (MetaViewModel builds the
+                    // diagnosis in Spanish); prefixing it here only duplicated
+                    // its own "no mostramos un total que no podemos probar".
+                    text = total.message,
                     style = MaterialTheme.typography.bodyMedium,
                     color = RaizGrayLight,
                 )

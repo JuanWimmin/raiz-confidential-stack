@@ -291,9 +291,34 @@ class MetaViewModel(
                 checks = checks,
             )
         } else {
+            val failing = checks.filter { it.ok == false }
+            val commitmentsFailed = failing.any { it.name.startsWith("commit(") }
             TotalState.Unverified(
-                message = checks.firstOrNull { it.ok == false }?.let { "${it.name}: ${it.detail}" }
-                    ?: "una comprobación contra los compromisos on-chain no pasó",
+                // The raw check names stay visible below this line (they match
+                // scripts/verify-goal-total's output on purpose, so a judge can
+                // compare). What goes HERE is the diagnosis in the user's
+                // language — the shim's own English detail leaking into Spanish
+                // copy was a rehearsal finding.
+                message = when {
+                    // The one cause the app can assert with certainty: the user
+                    // picked a source that admits to forgetting, and what it did
+                    // return cannot reproduce the on-chain commitment. Pedersen
+                    // commitments are binding, so a partial history can never be
+                    // made to match — the mismatch IS the missing history. This
+                    // is the verification working, not the fund being wrong.
+                    commitmentsFailed && src.forgets ->
+                        "Esta fuente olvidó parte del historial, así que la suma de los aportes " +
+                            "que sí devuelve no reproduce el compromiso que está en la cadena. " +
+                            "El dinero está — lo que falta son los eventos. No mostramos un total " +
+                            "que no podemos probar: cambia a Raiz Memory y vuelve."
+                    commitmentsFailed ->
+                        "Lo que leímos no reproduce el compromiso que está en la cadena: falta " +
+                            "historial, o esta fuente va atrasada respecto a la red. No mostramos " +
+                            "un total que no podemos probar."
+                    else ->
+                        failing.firstOrNull()?.let { "No pudimos comprobar «${it.name}»." }
+                            ?: "Una comprobación contra los compromisos on-chain no pasó."
+                },
                 checks = checks,
             )
         }
