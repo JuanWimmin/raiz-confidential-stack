@@ -34,7 +34,15 @@ anyone following the quickstart:
 ## Route 2 — public tunnel (convenient, ephemeral)
 
 We have no VM, so the public instance is a Cloudflare quick tunnel from the dev
-machine:
+machine. One command brings up the indexer, waits for it to be healthy, prints
+what it actually holds, opens the tunnel and verifies the public URL answers
+before announcing it:
+
+```powershell
+pwsh scripts/serve-public.ps1
+```
+
+Manually, if you prefer:
 
 ```powershell
 winget install --id Cloudflare.cloudflared
@@ -42,9 +50,18 @@ winget install --id Cloudflare.cloudflared
 ```
 
 It prints a `https://<random-words>.trycloudflare.com` URL that proxies straight
-to the local indexer. Verified serving real data: `/health`, `/coverage` and
-`/events` all answer over the public URL, backed by the same SQLite file with
-~3,998 indexed events across four testnet contracts.
+to the local indexer. Verified twice on 2026-08-03/04 serving real data:
+`/health`, `/coverage` and `/events` all answer over the public URL, backed by
+the SQLite file that held 4,138 indexed events across four testnet contracts at
+the second check.
+
+That instance is also the strongest single piece of evidence for the whole
+thesis: it serves the official CT demo wrapper's events from ledger **3837609**,
+while the public RPC's retention floor had already risen to **3838325**. Those
+events are gone from the network and present here — which is the entire point of
+the component. A clone started today gets the wrapper's history only from the
+current floor (73 events versus our 81), and `/coverage` says so rather than
+hiding it.
 
 **Its limitations, stated plainly.** A quick tunnel is anonymous and free, and
 it behaves accordingly:
