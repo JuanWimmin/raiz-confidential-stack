@@ -58,12 +58,24 @@ data class MetaUiState(
 sealed interface TotalState {
     data object Idle : TotalState
 
-    data class Running(val startedAt: Long, val phase: String) : TotalState
+    /**
+     * @param stale the figure that was on screen when this run started, if any.
+     *        It is kept VISIBLE but explicitly marked as outdated: blanking the
+     *        number out for 6-8 s is bad on camera, and leaving its "verified at
+     *        ledger N" caption alone would claim a verification that no longer
+     *        covers the timeline below it. Neither is acceptable; this is.
+     */
+    data class Running(
+        val startedAt: Long,
+        val phase: String,
+        val stale: Verified? = null,
+    ) : TotalState
 
     data class Verified(
         val stroops: Long,
         val atLedger: Long,
         val contributions: Int,
+        /** Spanish label of the source the user picked, e.g. "Raiz Memory". */
         val eventSource: String,
         val eventsScanned: Int,
         val ms: Int,
@@ -126,7 +138,18 @@ class MetaViewModel(
 
     // -- the timeline --------------------------------------------------------
 
-    fun refresh(autoVerify: Boolean = false) {
+    /**
+     * Reload the timeline and — by default — re-verify the total with it.
+     *
+     * `autoVerify` defaults to TRUE on purpose: the two numbers on this screen
+     * describe the same fund, so refreshing one while leaving the other pinned
+     * to an older ledger puts a contradiction on screen ("4 aportes" next to a
+     * total verified when there were 3). Re-verification costs 6-8 s and the
+     * hero says so while it runs, which is cheaper than a wrong number.
+     * Callers that must NOT spend it (a base-URL edit, which also invalidates
+     * the total outright) pass false explicitly.
+     */
+    fun refresh(autoVerify: Boolean = true) {
         loadJob?.cancel()
         val first = _state.value.timeline.isEmpty
         _state.value = _state.value.copy(
@@ -190,8 +213,12 @@ class MetaViewModel(
         if (_state.value.total is TotalState.Running) return
         totalJob?.cancel()
         val startedAt = SystemClock.elapsedRealtime()
+        // Carry the previous figure into the running state so the hero can show
+        // it greyed out and labelled "desactualizado" instead of claiming it is
+        // still verified (or blanking the screen).
+        val stale = _state.value.total as? TotalState.Verified
         _state.value = _state.value.copy(
-            total = TotalState.Running(startedAt, "abriendo la view key publicada…"),
+            total = TotalState.Running(startedAt, "abriendo la view key publicada…", stale),
         )
         totalJob = viewModelScope.launch {
             val src = sourceStore.value
@@ -213,10 +240,11 @@ class MetaViewModel(
                     total = TotalState.Running(
                         startedAt,
                         "leyendo eventos de ${src.label} y recomponiendo el total…",
+                        stale,
                     ),
                 )
                 val r = bridge.goalTotal(params.toString(), eventsSourceUrl = src.baseUrl)
-                applyTotal(r)
+                applyTotal(r, src)
             } catch (e: Exception) {
                 Log.e(TAG, "goalTotal failed", e)
                 _state.value = _state.value.copy(
@@ -226,7 +254,7 @@ class MetaViewModel(
         }
     }
 
-    private fun applyTotal(r: JSONObject) {
+    private fun applyTotal(r: JSONObject, src: EventSource) {
         val checks = buildList {
             val arr = r.optJSONArray("checks")
             for (i in 0 until (arr?.length() ?: 0)) {
@@ -249,7 +277,15 @@ class MetaViewModel(
                 stroops = r.optString("totalStroops").toLongOrNull() ?: 0L,
                 atLedger = r.optLong("verifiedAtLedger"),
                 contributions = r.optJSONArray("contributions")?.length() ?: 0,
-                eventSource = r.optString("eventSource"),
+                // The shim reports its plumbing ("events-url" / "rpc"), which is
+                // not something to print in Spanish copy. Name the source the
+                // user actually picked — unless the shim says it bypassed our
+                // URL and read the RPC itself, in which case say THAT.
+                eventSource = if (r.optString("eventSource") == "rpc") {
+                    "el RPC público"
+                } else {
+                    src.label
+                },
                 eventsScanned = r.optInt("eventsScanned"),
                 ms = r.optInt("ms"),
                 checks = checks,

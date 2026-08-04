@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import xyz.raiz.sobre.data.EventSource
@@ -236,11 +237,27 @@ private fun TotalHero(state: MetaUiState, onVerifyTotal: () -> Unit) {
             }
 
             is TotalState.Running -> {
+                // The previous figure stays readable — struck through and dimmed
+                // — while the new one is being proved. What it must NOT keep is
+                // its "Verificado … ledger N" caption: that verification no
+                // longer covers the timeline underneath.
+                val stale = total.stale
                 Text(
-                    text = "•••",
-                    style = MaterialTheme.typography.displayLarge.copy(fontSize = 44.sp),
-                    color = RaizWhite,
+                    text = stale?.stroops?.formatXlm() ?: "•••",
+                    style = MaterialTheme.typography.displayLarge.copy(
+                        fontSize = 44.sp,
+                        textDecoration = if (stale != null) TextDecoration.LineThrough else null,
+                    ),
+                    color = if (stale != null) RaizWhite.copy(alpha = 0.35f) else RaizWhite,
                 )
+                if (stale != null) {
+                    Text(
+                        text = "Desactualizado: esto se verificó en el ledger ${stale.atLedger}, " +
+                            "antes de lo que ves abajo. Recalculando…",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                        color = RaizYellow,
+                    )
+                }
                 Text(
                     text = total.phase,
                     style = MaterialTheme.typography.bodyMedium,

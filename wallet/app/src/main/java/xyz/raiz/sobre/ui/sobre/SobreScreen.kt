@@ -1,5 +1,9 @@
 package xyz.raiz.sobre.ui.sobre
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,7 +17,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.OpenInNew
@@ -25,14 +31,28 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import xyz.raiz.sobre.ui.components.PhaseBanner
 import xyz.raiz.sobre.ui.components.ProofProgress
 import xyz.raiz.sobre.ui.components.SobreCard
@@ -49,6 +69,10 @@ import xyz.raiz.sobre.ui.theme.RaizPurple
 import xyz.raiz.sobre.ui.theme.RaizWhite
 import xyz.raiz.sobre.ui.theme.RaizYellow
 import xyz.raiz.sobre.ui.util.StellarExpert
+
+/** How long a finished operation keeps the above-the-fold slot. */
+private const val RESULTADO_ARRIBA_MS = 90_000L
+
 
 /**
  * SCREEN 2 — "Mi Sobre". The private half: a confidential balance only this
@@ -72,8 +96,55 @@ fun SobreScreen(
 ) {
     val context = LocalContext.current
 
+    // MEASURED ON THE VIVO Y21 (2026-08-04): this window does NOT resize when the
+    // IME opens — the numeric keyboard simply draws on top of it, bottom nav bar
+    // included, so Compose sees a viewport that is still 1600 px tall and has no
+    // reason to scroll `Sellar`/`Aportar` out from under the keyboard. Asking for
+    // ADJUST_RESIZE while this screen is on shrinks the real viewport, which is
+    // what makes the scroll below possible at all. Scoped and restored on
+    // dispose: no other screen has a text field that matters.
+    ResizeParaElTeclado()
+
+    // A result the user JUST produced belongs where the progress card was — above
+    // the fold. On this 720x1600 phone anything after the amount field is
+    // off-screen, so a tx hash rendered under the buttons is a tx hash nobody
+    // sees at the exact moment it matters. After [RESULTADO_ARRIBA_MS] it settles
+    // back under the buttons that caused it, which is where an OLD outcome reads
+    // best.
+    val finishedAt = state.op.finishedAtOrNull
+    var resultadoReciente by remember(finishedAt) { mutableStateOf(finishedAt != null) }
+    LaunchedEffect(finishedAt) {
+        if (finishedAt != null) {
+            delay(RESULTADO_ARRIBA_MS)
+            resultadoReciente = false
+        }
+    }
+    val opArriba = state.op is OpUiState.Running || resultadoReciente
+
+    // Keyboard handling, second half (the first is [ResizeParaElTeclado]). The
+    // viewport on this screen only ever shrinks for one reason — the IME just
+    // opened — so that is the signal to scroll, and it is a far more reliable one
+    // than a focus event: a `BringIntoViewRequester` on the button row was tried
+    // first and never reached the scroller (verified on device, 2026-08-04).
+    // Scrolling the whole "Mover monedas" card to the top puts the field AND
+    // `Sellar`/`Aportar` above the keyboard, which is the state the user needs.
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var altoPrevio by remember { mutableIntStateOf(0) }
+
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        state = listState,
+        modifier = modifier
+            .fillMaxSize()
+            .onSizeChanged { tamano ->
+                val previo = altoPrevio
+                altoPrevio = tamano.height
+                if (previo > 0 && tamano.height < previo) {
+                    val idx = listState.layoutInfo.visibleItemsInfo
+                        .firstOrNull { it.key == ITEM_ACCIONES }?.index
+                    if (idx != null) scope.launch { listState.animateScrollToItem(idx) }
+                }
+            },
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
@@ -101,8 +172,11 @@ fun SobreScreen(
         // ABOVE THE FOLD ON PURPOSE: a 10-30 s proof whose progress card sits
         // below the actions is a progress card nobody sees. Measured on the
         // Vivo Y21 (720x1600): anything after the amount field is off-screen.
-        if (state.op is OpUiState.Running) {
-            item("op-running") { OpBlock(state, context) }
+        // The OUTCOME inherits the same slot for its first minute and a half:
+        // it replaces the progress card in place, so the hash appears exactly
+        // where the user was already looking.
+        if (opArriba && state.op !is OpUiState.Idle) {
+            item("op-arriba") { OpBlock(state, context) }
         }
 
         item("descifrado") {
@@ -158,7 +232,7 @@ fun SobreScreen(
             }
         }
 
-        item("acciones") {
+        item(ITEM_ACCIONES) {
             AccionesCard(
                 state = state,
                 onAmountChange = onAmountChange,
@@ -167,8 +241,9 @@ fun SobreScreen(
             )
         }
 
-        // The Ok/Failed outcome stays here, under the buttons that caused it.
-        if (state.op !is OpUiState.Running) {
+        // An older Ok/Failed outcome settles here, under the buttons that caused
+        // it. While it is fresh it lives above the fold instead (see [opArriba]).
+        if (!opArriba && state.op !is OpUiState.Running) {
             item("op-result") { OpBlock(state, context) }
         }
 
@@ -196,6 +271,43 @@ fun SobreScreen(
     }
 }
 
+/** LazyColumn key of the card that holds the amount field and the buttons. */
+private const val ITEM_ACCIONES = "acciones"
+
+/**
+ * Ask the window for `SOFT_INPUT_ADJUST_RESIZE` while this screen is composed,
+ * and put back whatever it had on the way out. Done here rather than in the
+ * manifest because the manifest belongs to the app shell, and because this is
+ * the only screen where the keyboard fights a button.
+ */
+@Composable
+private fun ResizeParaElTeclado() {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = view.context.actividad()?.window
+        val previo = window?.attributes?.softInputMode
+        window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        onDispose { if (window != null && previo != null) window.setSoftInputMode(previo) }
+    }
+}
+
+/** Unwrap the Compose ContextWrapper chain down to the hosting Activity. */
+private tailrec fun Context.actividad(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.actividad()
+    else -> null
+}
+
+/**
+ * The amount field and the two operations.
+ *
+ * The numeric keyboard is 500+ px tall on this 720x1600 phone and lands right on
+ * top of `Sellar`/`Aportar`, which during the rehearsal forced a BACK press
+ * before the button could be tapped. `ImeAction.Done` closes it with the
+ * keyboard's own action key — BACK is not a gesture anybody performs on purpose
+ * mid-demo — and the caller scrolls this card above the keyboard so the buttons
+ * are reachable without closing it at all.
+ */
 @Composable
 private fun AccionesCard(
     state: SobreUiState,
@@ -203,6 +315,8 @@ private fun AccionesCard(
     onSellar: () -> Unit,
     onAportar: () -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -222,7 +336,11 @@ private fun AccionesCard(
             label = { Text("Monto en XLM") },
             singleLine = true,
             enabled = !state.busy,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(),
         )

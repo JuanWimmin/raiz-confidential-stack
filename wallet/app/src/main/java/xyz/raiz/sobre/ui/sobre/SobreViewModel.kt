@@ -58,6 +58,13 @@ sealed interface OpUiState {
      */
     data class Running(val op: String, val label: String, val phase: String, val startedAt: Long) : OpUiState
 
+    /**
+     * @param finishedAt `SystemClock.elapsedRealtime()` when the outcome
+     *        arrived. The screen pins a FRESH result above the fold (a tx hash
+     *        the user cannot see without scrolling might as well not exist on a
+     *        720x1600 phone) and lets an old one settle back under the buttons
+     *        that produced it.
+     */
     data class Ok(
         val op: String,
         val label: String,
@@ -65,11 +72,25 @@ sealed interface OpUiState {
         val txHash: String?,
         val proveMs: Long,
         val note: String = "",
+        val finishedAt: Long = SystemClock.elapsedRealtime(),
     ) : OpUiState
 
     /** Verbatim failure text: ProverException/HostError messages are the product. */
-    data class Failed(val op: String, val label: String, val message: String) : OpUiState
+    data class Failed(
+        val op: String,
+        val label: String,
+        val message: String,
+        val finishedAt: Long = SystemClock.elapsedRealtime(),
+    ) : OpUiState
 }
+
+/** When did this outcome land? `null` while idle or still running. */
+val OpUiState.finishedAtOrNull: Long?
+    get() = when (this) {
+        is OpUiState.Ok -> finishedAt
+        is OpUiState.Failed -> finishedAt
+        else -> null
+    }
 
 class SobreViewModel(
     app: Application,
