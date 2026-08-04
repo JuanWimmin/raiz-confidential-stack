@@ -25,3 +25,6 @@ node_modules/
 # Misc
 *.log
 .claude/settings.local.json
+
+# Video captures: the final cut lives on YouTube, not in git
+docs/video/*.mp4
