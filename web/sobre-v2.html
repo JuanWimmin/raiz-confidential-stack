@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sobre del Barrio — lo que la cadena no puede leer</title>
+<meta name="description" content="Wallet móvil de Confidential Tokens: los aportes van cifrados en la cadena, la participación es pública, y el total del fondo lo verifica cualquiera con la view key publicada a propósito." />
+<meta name="theme-color" content="#07090A" />
+<meta property="og:title" content="Sobre del Barrio — lo que la cadena no puede leer" />
+<meta property="og:description" content="Los aportes son secretos. El fondo es de vidrio. Y la wallet recuerda." />
+<meta property="og:url" content="https://raizapp.xyz/sobre-v2.html" />
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2307090A'/%3E%3Ccircle cx='32' cy='24' r='13' fill='%231D9E75'/%3E%3Ccircle cx='32' cy='19' r='3' fill='%23FBBF24'/%3E%3Crect x='29' y='36' width='6' height='12' rx='3' fill='%230B5644'/%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+<noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" /></noscript>
+
+<style>
+/* ===========================================================================
+   SOBRE DEL BARRIO · v2
+   ---------------------------------------------------------------------------
+   La idea que gobierna todo: en esta página los montos INTENTAN resolverse y
+   FRACASAN. Al pasar el cursor se revuelven más, no menos. Es la inversión del
+   cliché de "texto que se descifra", y no es decoración: es el producto. El
+   único número que se resuelve en toda la página es el total verificado,
+   porque es el único que puede probarse.
+
+   Paleta heredada de RAÍZ, intacta. Los neutros están escogidos con sesgo
+   cian-verde, no heredados de un gris medio.
+   =========================================================================== */
+
+:root{
+  /* RAÍZ, sin tocar */
+  --verde:#0F6E56;
+  --verde-vivo:#1D9E75;
+  --amarillo:#FBBF24;
+  --purpura:#534AB7;
+
+  /* neutros escogidos: negros con una gota de verde, jamás azules */
+  --tinta:#07090A;
+  --tinta-2:#0C1011;
+  --panel:#111617;
+  --borde:#1B2322;
+  --borde-vivo:#2B3833;
+
+  --texto:#ECEFEA;
+  --niebla:#7C8B84;
+  --niebla-2:#4E5A55;
+
+  --falla:#FF5A5A;      /* semántico, nunca decorativo */
+
+  --acento:var(--verde-vivo);   /* lo mueve el scroll */
+  --u:clamp(16px,4.2vw,26px);
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--tinta);color:var(--texto);
+  font-family:'Bricolage Grotesque',system-ui,sans-serif;
+  font-size:17px;line-height:1.6;font-weight:300;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+::selection{background:var(--amarillo);color:#07090A}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--amarillo);outline-offset:3px}
+.mono{font-family:'Space Mono',ui-monospace,monospace}
+
+.wrap{max-width:1140px;margin-inline:auto;padding-inline:clamp(20px,5vw,56px)}
+
+/* --- el rail de la raíz: crece con el scroll y ES el medidor -------------- */
+.rail{position:fixed;left:0;top:0;bottom:0;width:2px;z-index:40;background:var(--borde);pointer-events:none}
+.rail i{position:absolute;left:0;top:0;width:100%;height:0;
+  background:linear-gradient(180deg,var(--verde),var(--acento));
+  box-shadow:0 0 14px color-mix(in srgb,var(--acento) 55%,transparent);
+  transition:background .6s linear}
+.rail b{position:absolute;left:-4px;width:10px;height:10px;border-radius:50%;
+  background:var(--amarillo);box-shadow:0 0 16px rgba(251,191,36,.65);transform:translateY(-50%)}
+
+/* --- el motivo central: cifra que no se deja leer ------------------------- */
+.cifra{
+  font-family:'Space Mono',monospace;font-weight:700;
+  color:var(--purpura);background:color-mix(in srgb,var(--purpura) 13%,transparent);
+  border:1px solid color-mix(in srgb,var(--purpura) 38%,transparent);
+  padding:.08em .42em;border-radius:2px;white-space:nowrap;
+  cursor:not-allowed;user-select:none;position:relative;display:inline-block;
+  font-variant-numeric:tabular-nums;transition:color .2s,border-color .2s;
+}
+.cifra:hover{color:var(--amarillo);border-color:color-mix(in srgb,var(--amarillo) 55%,transparent)}
+.cifra::after{
+  content:'sigue cifrado';position:absolute;left:50%;bottom:calc(100% + 10px);
+  transform:translateX(-50%) translateY(4px);
+  font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;font-weight:400;
+  color:var(--amarillo);background:var(--tinta-2);border:1px solid var(--borde-vivo);
+  padding:5px 9px;white-space:nowrap;opacity:0;pointer-events:none;
+  transition:opacity .18s,transform .18s;
+}
+.cifra:hover::after{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* --- header -------------------------------------------------------------- */
+.hdr{position:fixed;inset:0 0 auto 0;z-index:50;background:color-mix(in srgb,var(--tinta) 84%,transparent);
+  backdrop-filter:blur(12px);border-bottom:1px solid transparent;transition:border-color .25s}
+.hdr.on{border-bottom-color:var(--borde)}
+.hdr__in{display:flex;align-items:center;justify-content:space-between;height:62px;gap:20px}
+.marca{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:700;font-size:.98rem;letter-spacing:-.02em}
+.nav{display:flex;gap:22px;align-items:center}
+.nav a{font-family:'Space Mono',monospace;font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--niebla);text-decoration:none;transition:color .18s}
+.nav a:hover{color:var(--amarillo)}
+@media(max-width:820px){.nav a:not(.cta){display:none}}
+.nav .cta{color:var(--verde-vivo)}
+
+/* --- HERO: composición escalonada, no un bloque centrado ----------------- */
+.hero{padding:clamp(110px,17vh,180px) 0 clamp(60px,9vh,110px);position:relative;overflow:hidden}
+.hero__eyebrow{display:flex;align-items:center;gap:11px;font-family:'Space Mono',monospace;
+  font-size:.68rem;letter-spacing:.19em;text-transform:uppercase;color:var(--niebla);margin-bottom:calc(var(--u)*1.1)}
+.hero__eyebrow i{width:9px;height:9px;border-radius:50%;background:var(--amarillo);
+  box-shadow:0 0 12px rgba(251,191,36,.6);flex:0 0 auto}
+
+/* el escalonado: cada línea con su propio tamaño, peso y sangría */
+.h1{display:grid;gap:.04em;margin-bottom:calc(var(--u)*1.4)}
+.h1 span{display:block;line-height:.92;letter-spacing:-.045em;text-wrap:balance}
+.l1{font-size:clamp(2.2rem,7.4vw,5.1rem);font-weight:300;color:var(--niebla)}
+.l2{font-size:clamp(2.9rem,10.4vw,7.2rem);font-weight:800;margin-left:clamp(0px,3.4vw,64px)}
+.l3{font-size:clamp(2rem,6.2vw,4.2rem);font-weight:300;margin-left:clamp(0px,9vw,168px);color:var(--verde-vivo)}
+.l2 em{font-style:normal;color:var(--purpura)}
+
+.hero__grid{display:grid;grid-template-columns:1.15fr .85fr;gap:clamp(28px,5vw,64px);align-items:start}
+@media(max-width:900px){.hero__grid{grid-template-columns:1fr}}
+.hero__p{max-width:46ch;color:var(--niebla);font-size:1.04rem;line-height:1.72}
+.hero__p b{color:var(--texto);font-weight:600}
+.hero__cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:calc(var(--u)*1.2)}
+
+.btn{display:inline-flex;align-items:center;gap:9px;font-weight:700;font-size:.92rem;
+  letter-spacing:-.01em;text-decoration:none;padding:14px 24px;border:1px solid;transition:.16s}
+.btn--p{background:var(--verde-vivo);border-color:var(--verde-vivo);color:#03150F}
+.btn--p:hover{background:var(--amarillo);border-color:var(--amarillo);color:#07090A}
+.btn--g{background:transparent;border-color:var(--borde-vivo);color:var(--texto)}
+.btn--g:hover{border-color:var(--amarillo);color:var(--amarillo)}
+
+/* --- la ficha del fondo: el ÚNICO número que se resuelve ----------------- */
+.ficha{border:1px solid var(--borde);background:var(--panel);padding:calc(var(--u)*1.05)}
+.ficha__k{font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--niebla-2)}
+.ficha__total{font-size:clamp(2.6rem,8vw,3.6rem);font-weight:800;letter-spacing:-.04em;
+  line-height:1.02;margin:.18em 0 .1em;font-variant-numeric:tabular-nums}
+.ficha__total.ok{color:var(--verde-vivo)}
+.ficha__sello{display:flex;gap:8px;align-items:flex-start;font-family:'Space Mono',monospace;
+  font-size:.65rem;line-height:1.65;color:var(--amarillo)}
+.ficha__filas{margin-top:calc(var(--u)*.9);border-top:1px solid var(--borde);padding-top:14px;display:grid;gap:0}
+.fila{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;
+  border-bottom:1px dashed var(--borde)}
+.fila:last-child{border-bottom:0;padding-bottom:0}
+.fila__q{font-size:.92rem}
+.fila__q small{display:block;font-family:'Space Mono',monospace;font-size:.66rem;color:var(--niebla-2);margin-top:2px}
+
+/* --- secciones ----------------------------------------------------------- */
+.sec{padding:clamp(70px,11vh,120px) 0;border-top:1px solid var(--borde);position:relative}
+.sec__k{display:flex;align-items:center;gap:11px;font-family:'Space Mono',monospace;font-size:.68rem;
+  letter-spacing:.19em;text-transform:uppercase;color:var(--niebla);margin-bottom:var(--u)}
+.sec__k i{width:9px;height:9px;border-radius:50%;background:var(--acento);transition:background .6s}
+.sec h2{font-size:clamp(1.85rem,4.6vw,3.1rem);font-weight:800;letter-spacing:-.035em;
+  line-height:1.04;text-wrap:balance;max-width:19ch}
+.sec h2 em{font-style:normal;color:var(--acento);transition:color .6s}
+.sec__p{margin-top:var(--u);max-width:58ch;color:var(--niebla);line-height:1.74}
+.sec__p b{color:var(--texto);font-weight:600}
+
+/* --- el candado + el lienzo del compromiso ------------------------------- */
+.sello{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,4vw,44px);align-items:center;margin-top:calc(var(--u)*1.6)}
+@media(max-width:860px){.sello{grid-template-columns:1fr}}
+.lienzo{border:1px solid var(--borde);background:var(--tinta-2);aspect-ratio:1/.82;position:relative;overflow:hidden}
+.lienzo canvas{display:block;width:100%;height:100%}
+.lienzo figcaption{position:absolute;left:0;right:0;bottom:0;padding:11px 14px;
+  font-family:'Space Mono',monospace;font-size:.62rem;line-height:1.6;color:var(--niebla-2);
+  background:linear-gradient(180deg,transparent,var(--tinta-2) 62%)}
+.candados{display:grid;gap:14px}
+.cand{display:flex;gap:14px;align-items:flex-start;border:1px solid var(--borde);
+  background:var(--panel);padding:16px 18px}
+.cand svg{flex:0 0 auto;margin-top:2px}
+.cand h3{font-size:1.02rem;font-weight:700;letter-spacing:-.02em;margin-bottom:3px}
+.cand p{font-size:.9rem;color:var(--niebla);line-height:1.62}
+.cand--abierto{border-color:color-mix(in srgb,var(--amarillo) 40%,transparent)}
+.cand--abierto h3{color:var(--amarillo)}
+@keyframes forcejeo{0%,88%,100%{transform:translateY(0)}92%{transform:translateY(-1.5px)}96%{transform:translateY(-.6px)}}
+.grillete{transform-origin:center;animation:forcejeo 4.6s ease-in-out infinite}
+
+/* --- la sección que se desgarra ------------------------------------------ */
+.olvido{display:grid;gap:2px;margin-top:calc(var(--u)*1.5);border:1px solid var(--borde);background:var(--borde)}
+.ev{background:var(--tinta-2);padding:13px 16px;display:grid;grid-template-columns:1fr auto;
+  align-items:baseline;gap:6px 14px;font-family:'Space Mono',monospace;font-size:.72rem;color:var(--niebla);
+  position:relative;overflow:hidden}
+.ev>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev b{color:var(--texto);font-weight:400}
+.ev__t{color:var(--niebla-2);font-size:.66rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+@media(max-width:600px){
+  /* En vertical la dirección y el ledger no caben en una línea. Antes de
+     partirlas a lo bruto, se apilan: el ledger es el dato secundario. */
+  .ev{grid-template-columns:1fr;font-size:.7rem}
+  .ev__t{grid-row:2}
+}
+/* el desgarro: sólo aquí, sólo una vez */
+.ev.rota{animation:desgarro .62s steps(2,end) forwards}
+@keyframes desgarro{
+  0%{clip-path:inset(0 0 0 0);transform:translateX(0);filter:none;opacity:1}
+  18%{clip-path:inset(22% 0 34% 0);transform:translateX(-7px);filter:hue-rotate(-40deg) saturate(2.4)}
+  34%{clip-path:inset(58% 0 8% 0);transform:translateX(9px)}
+  52%{clip-path:inset(4% 0 66% 0);transform:translateX(-12px);opacity:.75}
+  74%{clip-path:inset(40% 0 40% 0);transform:translateX(6px);opacity:.35}
+  100%{clip-path:inset(50% 0 50% 0);transform:translateX(0);opacity:0}
+}
+/* Segundo tiempo: la fila no se queda en blanco, se va. Un hueco vacío se lee
+   como un fallo de maquetación; el colapso se lee como lo que es — historia
+   que ya no está. */
+.ev.ida{
+  padding-block:0;font-size:0;opacity:0;
+  max-height:0;border:0;
+  transition:max-height .34s cubic-bezier(.6,0,.2,1),padding-block .34s,font-size .34s;
+}
+.ev:not(.ida){max-height:120px;transition:max-height .34s cubic-bezier(.6,0,.2,1),padding-block .34s,font-size .34s}
+.olvido__pie{background:var(--tinta-2);padding:15px 16px;font-family:'Space Mono',monospace;
+  font-size:.7rem;color:var(--falla);line-height:1.7;border-top:1px solid var(--borde)}
+.olvido__pie.ok{color:var(--verde-vivo)}
+
+.mando{display:flex;flex-wrap:wrap;gap:10px;margin-top:var(--u);align-items:center}
+.sw{font-family:'Space Mono',monospace;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:10px 16px;border:1px solid var(--borde-vivo);background:transparent;color:var(--niebla);
+  cursor:pointer;transition:.16s}
+.sw[aria-pressed="true"]{border-color:var(--acento);color:var(--acento);
+  background:color-mix(in srgb,var(--acento) 10%,transparent)}
+.sw:hover{color:var(--texto)}
+
+/* --- los cinco checks ---------------------------------------------------- */
+.checks{margin-top:calc(var(--u)*1.4);border:1px solid var(--borde);background:var(--tinta-2);
+  font-family:'Space Mono',monospace;font-size:.74rem;line-height:1.9}
+.checks div{padding:11px 16px;border-bottom:1px solid var(--borde);display:flex;gap:11px;
+  align-items:baseline;opacity:0;transform:translateX(-8px);transition:opacity .34s,transform .34s}
+.checks div:last-child{border-bottom:0}
+.checks.on div{opacity:1;transform:none}
+.checks.on div:nth-child(2){transition-delay:.13s}
+.checks.on div:nth-child(3){transition-delay:.26s}
+.checks.on div:nth-child(4){transition-delay:.39s}
+.checks.on div:nth-child(5){transition-delay:.52s}
+.checks .ok{color:var(--verde-vivo);flex:0 0 auto}
+.checks span:last-child{color:var(--niebla)}
+.veredicto{padding:15px 16px;background:color-mix(in srgb,var(--verde-vivo) 9%,transparent);
+  color:var(--verde-vivo);font-weight:700;border-top:1px solid var(--borde)}
+
+/* --- video --------------------------------------------------------------- */
+.video{margin-top:calc(var(--u)*1.4);position:relative;aspect-ratio:16/9;border:1px solid var(--borde);
+  background:var(--tinta-2);cursor:pointer;overflow:hidden}
+.video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.video__ph{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:15px;text-align:center;padding:22px}
+.video__play{width:62px;height:62px;border-radius:50%;background:var(--verde-vivo);display:grid;place-content:center;
+  box-shadow:0 0 0 9px color-mix(in srgb,var(--verde-vivo) 14%,transparent);transition:transform .18s}
+.video:hover .video__play{transform:scale(1.08)}
+
+/* --- datos / cierre ------------------------------------------------------ */
+.datos{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--borde);
+  border:1px solid var(--borde);margin-top:calc(var(--u)*1.5)}
+@media(max-width:760px){.datos{grid-template-columns:repeat(2,1fr)}}
+.dato{background:var(--tinta-2);padding:19px 17px}
+.dato b{display:block;font-size:1.75rem;font-weight:800;letter-spacing:-.03em;color:var(--verde-vivo);
+  font-variant-numeric:tabular-nums;line-height:1.1}
+.dato b.am{color:var(--amarillo)}
+.dato span{display:block;margin-top:6px;font-family:'Space Mono',monospace;font-size:.62rem;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--niebla-2);line-height:1.55}
+
+.pie{border-top:1px solid var(--borde);padding:48px 0 40px;background:var(--tinta-2)}
+.pie__in{display:flex;flex-wrap:wrap;gap:26px;justify-content:space-between;align-items:flex-start}
+.pie p{color:var(--niebla-2);font-size:.9rem;max-width:44ch;line-height:1.65}
+.pie__l{display:grid;gap:9px;font-family:'Space Mono',monospace;font-size:.73rem}
+.pie a{color:var(--niebla);text-decoration:none}
+.pie a:hover{color:var(--amarillo)}
+
+.rv{opacity:0;transform:translateY(16px);transition:opacity .55s cubic-bezier(.2,.8,.2,1),transform .55s cubic-bezier(.2,.8,.2,1)}
+.rv.in{opacity:1;transform:none}
+
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .rv{opacity:1;transform:none;transition:none}
+  .checks div{opacity:1;transform:none;transition:none}
+  .grillete{animation:none}
+  .ev.rota{animation:none;opacity:.18;text-decoration:line-through}
+  .rail i{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="rail" aria-hidden="true"><i id="rail-i"></i><b id="rail-b"></b></div>
+
+<header class="hdr" id="hdr">
+  <div class="wrap hdr__in">
+    <a class="marca" href="#">
+      <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="32" cy="24" r="13" fill="#1D9E75"/><circle cx="20" cy="29" r="8" fill="#0F6E56"/>
+        <circle cx="44" cy="29" r="8" fill="#0F6E56"/><circle cx="32" cy="19" r="3" fill="#FBBF24"/>
+        <circle cx="24" cy="27" r="2.6" fill="#FBBF24"/><circle cx="40" cy="26" r="2.6" fill="#FBBF24"/>
+        <rect x="29" y="36" width="6" height="12" rx="3" fill="#0B5644"/>
+        <path d="M32 48c-1 4-5 5-8 8M32 48c1 4 5 5 8 8" stroke="#0B5644" stroke-width="3" stroke-linecap="round" fill="none"/>
+      </svg>
+      Sobre del Barrio
+    </a>
+    <nav class="nav">
+      <a href="#sello">El sello</a>
+      <a href="#olvido">El olvido</a>
+      <a href="#prueba">La prueba</a>
+      <a class="cta" href="https://github.com/JuanWimmin/raiz-confidential-stack" target="_blank" rel="noopener">Repo ↗</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============================ HERO ============================ -->
+<section class="hero">
+  <div class="wrap">
+    <p class="hero__eyebrow rv"><i></i> Confidential Tokens · Stellar testnet</p>
+
+    <h1 class="h1 rv">
+      <span class="l1">Todos ven quién.</span>
+      <span class="l2">Nadie ve <em data-cifra="cuánto">cuánto</em>.</span>
+      <span class="l3">Cualquiera verifica el total.</span>
+    </h1>
+
+    <div class="hero__grid">
+      <div class="rv">
+        <p class="hero__p">
+          En el barrio, ver quién colabora es solidaridad. Ver cuánto pone cada quien no le corresponde a nadie.
+          <b>Esta wallet escribe esa norma en criptografía</b>: el monto de cada aporte viaja cifrado dentro de la
+          transacción, la participación queda pública, y la view key de auditoría del fondo se publica a propósito
+          para que el total lo pueda comprobar cualquiera — sin pedirnos nada.
+        </p>
+        <div class="hero__cta">
+          <a class="btn btn--p" href="#prueba">Cómo se prueba</a>
+          <a class="btn btn--g" href="https://github.com/JuanWimmin/raiz-confidential-stack" target="_blank" rel="noopener">Ver el código ↗</a>
+        </div>
+      </div>
+
+      <aside class="ficha rv">
+        <p class="ficha__k">Meta del barrio</p>
+        <p style="font-weight:700;font-size:1.1rem;letter-spacing:-.02em;margin-top:2px">Techo de la casa comunal</p>
+        <p class="ficha__total ok" id="total">67 XLM</p>
+        <p class="ficha__sello">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="margin-top:3px;flex:0 0 auto"><path d="M20 6 9 17l-5-5" stroke="#FBBF24" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Verificado contra los compromisos on-chain · ledger 3970915</span>
+        </p>
+        <div class="ficha__filas">
+          <div class="fila">
+            <span class="fila__q">Aportó a la meta<small>GDU644N3…7OL4C6</small></span>
+            <span class="cifra" data-cifra="2 XLM">2 XLM</span>
+          </div>
+          <div class="fila">
+            <span class="fila__q">Aportó a la meta<small>GAKUQBQ4…SN2FYL</small></span>
+            <span class="cifra" data-cifra="25 XLM">25 XLM</span>
+          </div>
+          <div class="fila">
+            <span class="fila__q">Aportó a la meta<small>GDUDWSVP…OGDUXL</small></span>
+            <span class="cifra" data-cifra="5 XLM">5 XLM</span>
+          </div>
+        </div>
+        <p style="margin-top:15px;font-size:.82rem;color:var(--niebla-2);line-height:1.6">
+          Nueve aportes. El total se comprueba. Los montos, no: en la cadena solo hay compromisos.
+        </p>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ EL SELLO ============================ -->
+<section class="sec" id="sello">
+  <div class="wrap">
+    <p class="sec__k rv"><i></i> El sello</p>
+    <h2 class="rv">Un compromiso no es un <em>escondite</em>.</h2>
+    <p class="sec__p rv">
+      Cuando alguien aporta, la cadena no guarda el monto en ningún campo: guarda un <b>compromiso de Pedersen</b>,
+      un punto en una curva elíptica que combina el valor con un factor de cegado. De ahí no se puede leer el valor.
+      Pero el compromiso es <b>vinculante</b>: nadie —ni nosotros— puede encontrar después un valor distinto que
+      produzca ese mismo punto. Por eso el total se puede probar sin revelar los aportes.
+    </p>
+
+    <div class="sello">
+      <figure class="lienzo rv">
+        <canvas id="lienzo" width="640" height="524" aria-label="Dos puntos de curva se combinan en un único compromiso"></canvas>
+        <figcaption>v·G + r·H = C · el valor y el cegado entran, sale un punto. La operación no tiene vuelta atrás.</figcaption>
+      </figure>
+
+      <div class="candados">
+        <div class="cand rv">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path class="grillete" d="M8 10V7a4 4 0 0 1 8 0v3" stroke="#534AB7" stroke-width="1.9" stroke-linecap="round"/>
+            <rect x="4.5" y="10" width="15" height="10.5" rx="2" stroke="#534AB7" stroke-width="1.9"/>
+            <circle cx="12" cy="15.4" r="1.5" fill="#534AB7"/>
+          </svg>
+          <div><h3>El monto del aporte</h3><p>Cerrado para la cadena, para el explorador y para quien pase por ahí. No existe un campo que mostrar.</p></div>
+        </div>
+        <div class="cand rv">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path class="grillete" d="M8 10V7a4 4 0 0 1 8 0v3" stroke="#534AB7" stroke-width="1.9" stroke-linecap="round"/>
+            <rect x="4.5" y="10" width="15" height="10.5" rx="2" stroke="#534AB7" stroke-width="1.9"/>
+            <circle cx="12" cy="15.4" r="1.5" fill="#534AB7"/>
+          </svg>
+          <div><h3>El saldo del aportante</h3><p>Se descifra solo en su teléfono, con su clave. Ni la meta ni la view key publicada lo alcanzan.</p></div>
+        </div>
+        <div class="cand cand--abierto rv">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M8 10V7a4 4 0 0 1 7.5-1.9" stroke="#FBBF24" stroke-width="1.9" stroke-linecap="round"/>
+            <rect x="4.5" y="10" width="15" height="10.5" rx="2" stroke="#FBBF24" stroke-width="1.9"/>
+            <circle cx="12" cy="15.4" r="1.5" fill="#FBBF24"/>
+          </svg>
+          <div><h3>El total del fondo</h3><p>Abierto <b>a propósito</b>. La view key de la meta está publicada: con ella cualquiera reconstruye el total y comprueba que cuadra con la cadena.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ EL OLVIDO ============================ -->
+<section class="sec" id="olvido">
+  <div class="wrap">
+    <p class="sec__k rv"><i></i> El olvido</p>
+    <h2 class="rv">Una wallet privada que olvida <em>pierde plata</em>.</h2>
+    <p class="sec__p rv">
+      En Confidential Tokens el saldo no se lee: se <b>reconstruye</b> reproduciendo los eventos y descifrándolos.
+      Y los nodos RPC de Stellar solo conservan eventos unos siete días. Pasado ese punto no los borran de la
+      cadena — dejan de poder entregártelos. Pulsa y mira qué le queda a una wallet que solo tiene el RPC.
+    </p>
+
+    <div class="mando rv">
+      <button class="sw" id="sw-rm" aria-pressed="true">Raiz Memory</button>
+      <button class="sw" id="sw-rpc" aria-pressed="false">RPC · retención 7 días</button>
+    </div>
+
+    <div class="olvido rv" id="olvido">
+      <div class="ev" data-old="1"><span><b>Se creó la meta</b> · GAJPXAL7…LIM73X</span><span class="ev__t">ledger 3952518</span></div>
+      <div class="ev" data-old="1"><span><b>Aportó a la meta</b> · GDUTRPFZ…77DJ2I</span><span class="ev__t">ledger 3950172</span></div>
+      <div class="ev" data-old="1"><span><b>La meta cosechó</b> · GAJPXAL7…LIM73X</span><span class="ev__t">ledger 3950173</span></div>
+      <div class="ev" data-old="1"><span><b>Aportó a la meta</b> · GDUTRPFZ…77DJ2I</span><span class="ev__t">ledger 3950262</span></div>
+      <div class="ev" data-old="1"><span><b>La meta cosechó</b> · GAJPXAL7…LIM73X</span><span class="ev__t">ledger 3950263</span></div>
+      <div class="ev"><span><b>Aportó a la meta</b> · GAKUQBQ4…SN2FYL</span><span class="ev__t">ledger 3970848</span></div>
+      <div class="ev"><span><b>Aportó a la meta</b> · GAKUQBQ4…SN2FYL</span><span class="ev__t">ledger 3970912</span></div>
+      <p class="olvido__pie ok" id="olvido-pie">Historial completo · 9 aportes · el total cuadra con la cadena</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ LA PRUEBA ============================ -->
+<section class="sec" id="prueba">
+  <div class="wrap">
+    <p class="sec__k rv"><i></i> La prueba</p>
+    <h2 class="rv">No hace falta creernos. <em>Córrelo tú</em>.</h2>
+    <p class="sec__p rv">
+      El script vive fuera de la app y solo habla con el RPC público y la clave publicada. Autentica esa clave contra
+      <b>dos registros on-chain independientes</b>, descifra cada aporte hasta obtener su apertura de Pedersen completa,
+      vuelve a componer el compromiso y lo compara con el que está en la cadena. Si cuadra, cuadra: los compromisos son
+      vinculantes. Y si la fuente de eventos está incompleta, <b>se niega a imprimir un número</b>.
+    </p>
+
+    <div class="checks rv" id="checks">
+      <div><span class="ok">[OK]</span><span>goal_meta respalda esta cuenta de meta</span></div>
+      <div><span class="ok">[OK]</span><span>goal_meta.view_key == k1·H</span></div>
+      <div><span class="ok">[OK]</span><span>registro del auditor CT (id 1) == k1·H</span></div>
+      <div><span class="ok">[OK]</span><span>commit(Σ aperturas disponibles) == compromiso on-chain</span></div>
+      <div><span class="ok">[OK]</span><span>commit(Σ aperturas por recibir) == compromiso on-chain</span></div>
+      <p class="veredicto">Goal total: 67 XLM — verified on-chain at ledger 3970915</p>
+    </div>
+
+    <div class="video rv" id="video" role="button" tabindex="0" aria-label="Reproducir la demo">
+      <div class="video__ph">
+        <div class="video__play"><svg width="21" height="23" viewBox="0 0 22 24" aria-hidden="true"><path d="M21 12 0 24V0z" fill="#03150F"/></svg></div>
+        <p style="font-weight:700">La demo · 2:30</p>
+        <p class="mono" style="font-size:.68rem;letter-spacing:.11em;text-transform:uppercase;color:var(--niebla-2)" id="video-txt">Pulsa para reproducir</p>
+      </div>
+    </div>
+
+    <div class="datos rv">
+      <div class="dato"><b>4/4</b><span>operaciones CT reales desde el teléfono</span></div>
+      <div class="dato"><b class="am">937</b><span>eventos que servimos y el RPC ya no</span></div>
+      <div class="dato"><b>22,6 s</b><span>la prueba, calculada en el móvil</span></div>
+      <div class="dato"><b class="am">0</b><span>montos legibles en la cadena</span></div>
+    </div>
+  </div>
+</section>
+
+<footer class="pie">
+  <div class="wrap pie__in">
+    <div>
+      <p style="font-weight:700;color:var(--texto);margin-bottom:9px">Raiz Protocol</p>
+      <p>Developer preview sobre testnet, sin auditar. Aquí no hay dinero real. El <span class="mono" style="font-size:.85em">deposit</span> sí publica su monto, y la view key publicada abre el fondo aporte por aporte: está escrito en el README antes de que lo encuentre nadie.</p>
+    </div>
+    <div class="pie__l">
+      <a href="https://github.com/JuanWimmin/raiz-confidential-stack" target="_blank" rel="noopener">→ Repositorio</a>
+      <a href="https://github.com/JuanWimmin/raiz-confidential-stack/releases/tag/v0.1.0-summit" target="_blank" rel="noopener">→ Instalar el APK</a>
+      <a href="https://github.com/JuanWimmin/raiz-confidential-stack/blob/main/friction-report.md" target="_blank" rel="noopener">→ Reporte de fricción</a>
+      <a href="https://raizapp.xyz">→ RAÍZ</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+const YT_ID = '';
+const quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------------------------------------------------------------------------
+   1. La cifra que no se deja leer.
+   El cliché es texto que se descifra. Aquí ocurre lo contrario: intenta
+   resolverse y no lo consigue nunca. Al pasar el cursor, se agita más.
+--------------------------------------------------------------------------- */
+const GLIFOS = '0123456789ABCDEF#$%&/*+=<>?§¶∆◊';
+function cifrar(el){
+  const real = el.dataset.cifra || el.textContent;
+  const n = real.length;
+  let intensidad = 0.86, hover = false, t = 0;
+  el.setAttribute('aria-label', 'monto cifrado');
+  el.setAttribute('title', 'monto cifrado');
+  if (quieto){ el.textContent = '█'.repeat(Math.min(n, 6)); return; }
+
+  el.addEventListener('pointerenter', () => { hover = true; });
+  el.addEventListener('pointerleave', () => { hover = false; });
+
+  (function paso(){
+    // cada ~70 ms: no 60 fps. Es texto, no una animación, y esto corre en móviles de 4 GB.
+    if (t++ % 4 === 0){
+      const p = hover ? 1 : intensidad;
+      let out = '';
+      for (let i = 0; i < n; i++){
+        const c = real[i];
+        if (c === ' '){ out += ' '; continue; }
+        // deja asomar alguna letra de la unidad: casi lo lees, y por eso duele
+        out += (!hover && Math.random() > p && /[A-Z]/.test(c))
+          ? c
+          : GLIFOS[(Math.random() * GLIFOS.length) | 0];
+      }
+      el.textContent = out;
+    }
+    requestAnimationFrame(paso);
+  })();
+}
+document.querySelectorAll('.cifra, [data-cifra]').forEach(el => { if (el.dataset.cifra) cifrar(el); });
+
+/* ---------------------------------------------------------------------------
+   2. El lienzo del compromiso: v·G y r·H orbitan y se funden en C.
+   Canvas y no SVG a mano, como manda la casa. Se detiene fuera de pantalla.
+--------------------------------------------------------------------------- */
+(function(){
+  const cv = document.getElementById('lienzo');
+  if (!cv) return;
+  const cx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  let vivo = !quieto, f = 0;
+
+  new IntersectionObserver(es => es.forEach(e => { vivo = e.isIntersecting && !quieto; if (vivo) dibuja(); }),
+    { threshold: .05 }).observe(cv);
+
+  function punto(x, y, r, col, relleno){
+    cx.beginPath(); cx.arc(x, y, r, 0, 7);
+    if (relleno){ cx.fillStyle = col; cx.fill(); } else { cx.strokeStyle = col; cx.lineWidth = 1.6; cx.stroke(); }
+  }
+
+  function dibuja(){
+    f++;
+    cx.clearRect(0, 0, W, H);
+    const t = f / 116;
+    // La escena vive en el tercio central: antes quedaba hundida y con el
+    // techo del lienzo vacío.
+    const midX = W / 2, midY = H * 0.46;
+
+    // la curva: una banda tenue que da suelo a la escena
+    cx.strokeStyle = 'rgba(124,139,132,.15)'; cx.lineWidth = 1;
+    cx.beginPath();
+    for (let x = 30; x < W - 30; x += 5){
+      const u = (x - midX) / 132;
+      const y = midY + 118 - Math.sqrt(Math.max(0, u * u * u + 2.4)) * 40;
+      x === 30 ? cx.moveTo(x, y) : cx.lineTo(x, y);
+    }
+    cx.stroke();
+
+    // ciclo: los dos operandos orbitan, convergen, y sale un punto nuevo
+    const ciclo = (t % 1);
+    const junta = Math.min(1, Math.max(0, (ciclo - .42) / .3));
+    const sep = (1 - junta) * 128;
+    const ang = t * 1.5;
+
+    const ax = midX - Math.cos(ang) * sep, ay = midY - Math.sin(ang) * sep * .52;
+    const bx = midX + Math.cos(ang) * sep, by = midY + Math.sin(ang) * sep * .52;
+
+    if (junta < 1){
+      cx.strokeStyle = 'rgba(83,74,183,.32)'; cx.lineWidth = 1;
+      cx.beginPath(); cx.moveTo(ax, ay); cx.lineTo(bx, by); cx.stroke();
+      punto(ax, ay, 7, '#534AB7', true);
+      punto(bx, by, 7, '#FBBF24', true);
+      cx.font = '600 12px "Space Mono", monospace'; cx.textAlign = 'center';
+      cx.fillStyle = 'rgba(83,74,183,.9)'; cx.fillText('v·G', ax, ay - 15);
+      cx.fillStyle = 'rgba(251,191,36,.9)'; cx.fillText('r·H', bx, by - 15);
+    }
+
+    if (junta > 0){
+      const r = 8 + junta * 5;
+      punto(midX, midY, r, '#1D9E75', true);
+      // el halo se expande cuando acaba de formarse: el sello cerrándose
+      const halo = (1 - junta) * 46 + 14;
+      cx.strokeStyle = `rgba(29,158,117,${.45 * junta})`; cx.lineWidth = 1.4;
+      cx.beginPath(); cx.arc(midX, midY, halo + junta * 10, 0, 7); cx.stroke();
+      if (junta > .55){
+        cx.font = '700 13px "Space Mono", monospace'; cx.textAlign = 'center';
+        cx.fillStyle = `rgba(29,158,117,${(junta - .55) / .45})`;
+        cx.fillText('C', midX, midY - r - 12);
+      }
+    }
+
+    // el valor que nunca aparece
+    cx.font = '400 11px "Space Mono", monospace'; cx.textAlign = 'center';
+    cx.fillStyle = 'rgba(124,139,132,.5)';
+    cx.fillText(junta > .95 ? 'el valor ya no se puede despejar' : 'v es privado · r es aleatorio', midX, H - 54);
+
+    if (vivo) requestAnimationFrame(dibuja);
+  }
+  if (quieto){ dibuja(); } // un fotograma estático
+})();
+
+/* ---------------------------------------------------------------------------
+   3. El olvido. El glitch se gasta aquí y solo aquí.
+--------------------------------------------------------------------------- */
+(function(){
+  const viejos = [...document.querySelectorAll('.ev[data-old]')];
+  const pie = document.getElementById('olvido-pie');
+  const rm = document.getElementById('sw-rm'), rpc = document.getElementById('sw-rpc');
+  const raiz = document.documentElement;
+
+  // El desgarro y el colapso son dos tiempos: primero se rompe, luego se va.
+  viejos.forEach(el => el.addEventListener('animationend', e => {
+    if (e.animationName === 'desgarro') el.classList.add('ida');
+  }));
+
+  function aRPC(){
+    rm.setAttribute('aria-pressed', 'false'); rpc.setAttribute('aria-pressed', 'true');
+    raiz.style.setProperty('--acento', 'var(--falla)');
+    if (quieto){ viejos.forEach(el => el.classList.add('rota', 'ida')); }
+    else { viejos.forEach((el, i) => setTimeout(() => el.classList.add('rota'), i * 105)); }
+    setTimeout(() => {
+      pie.classList.remove('ok');
+      pie.textContent = 'Esta fuente olvidó todo lo anterior al ledger 3968852 · quedan 2 aportes · el total ya no se puede probar';
+    }, quieto ? 0 : viejos.length * 105 + 520);
+  }
+  function aRM(){
+    rpc.setAttribute('aria-pressed', 'false'); rm.setAttribute('aria-pressed', 'true');
+    raiz.style.setProperty('--acento', 'var(--verde-vivo)');
+    // Vuelven en orden inverso: lo más viejo es lo último en regresar.
+    [...viejos].reverse().forEach((el, i) => setTimeout(() => {
+      el.classList.remove('ida');
+      requestAnimationFrame(() => el.classList.remove('rota'));
+    }, quieto ? 0 : i * 90));
+    pie.classList.add('ok');
+    pie.textContent = 'Historial completo · 9 aportes · el total cuadra con la cadena';
+  }
+  rpc.addEventListener('click', aRPC);
+  rm.addEventListener('click', aRM);
+})();
+
+/* ---------------------------------------------------------------------------
+   4. Rail, revelados y video.
+--------------------------------------------------------------------------- */
+(function(){
+  const hdr = document.getElementById('hdr'), ri = document.getElementById('rail-i'), rb = document.getElementById('rail-b');
+  function scroll(){
+    const y = scrollY, h = document.body.scrollHeight - innerHeight;
+    const p = h > 0 ? Math.min(1, y / h) : 0;
+    hdr.classList.toggle('on', y > 8);
+    ri.style.height = (p * 100) + '%';
+    rb.style.top = (p * 100) + '%';
+  }
+  scroll(); addEventListener('scroll', scroll, { passive: true });
+
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+  }), { threshold: .12, rootMargin: '0px 0px -6% 0px' });
+  document.querySelectorAll('.rv, #checks').forEach(el => io.observe(el));
+
+  const v = document.getElementById('video');
+  const abrir = () => {
+    if (!YT_ID) return;
+    const f = document.createElement('iframe');
+    f.src = 'https://www.youtube-nocookie.com/embed/' + YT_ID + '?autoplay=1&rel=0';
+    f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture';
+    f.allowFullscreen = true; f.title = 'Sobre del Barrio — demo';
+    v.innerHTML = ''; v.appendChild(f); v.style.cursor = 'default';
+  };
+  v.addEventListener('click', abrir);
+  v.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); abrir(); } });
+  if (!YT_ID) document.getElementById('video-txt').textContent = 'Se publica con la entrega';
+})();
+</script>
+</body>
+</html>
