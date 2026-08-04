@@ -13,7 +13,17 @@ Everything below was executed against **Stellar testnet on 2026-08-03 and 2026-0
 
 In Latin American neighborhoods everyone sees *who* contributes to a common cause — that's solidarity. How *much* each person gives is nobody's business — that's dignity. **Sobre del Barrio** ("the neighborhood envelope") encodes that norm with OpenZeppelin's **Confidential Tokens**: an Android wallet where neighbors contribute to community goals with the amount encrypted inside the transaction, participation public, and the goal's **auditor view key published on purpose** so anyone can verify the fund without asking us for anything.
 
-**Stated precisely** (see [§8](#8-limitations-read-this-part)): a contribution's amount appears **nowhere** in the transaction — not as a field, not as a range. It is readable by the sender, by the goal, and by whoever holds the goal's published view key. That key opens the fund **itemized**, contribution by contribution — that is what "glass" means here, and it is deliberate. What the published key never opens is a contributor's **balance**: it cannot read the sender side at all.
+```mermaid
+flowchart LR
+    T["One aporte, on chain<br/>confidential_transfer, neighbor to goal<br/>amount = a 15,308-byte ciphertext"] -->|"who and when, never how much"| P["Anyone, with a public explorer"]
+    D["deposit (Sellar)<br/>amount in the clear, by construction"] -->|"the amount"| P
+    T -->|"its own amount, its own balance"| S["The contributor's phone"]
+    T -->|"the amounts it receives"| G["The goal"]
+    T -->|"EVERY aporte into the goal, itemized:<br/>each amount and its randomness.<br/>Never the sender's balance."| K1["Published view key, auditor id 1<br/>anyone who wants it, on purpose"]
+    T -->|"the sender side: the amount and<br/>the sender's own balance"| K0["Custodian key, auditor id 0<br/>held by us in this demo"]
+```
+
+*Stated precisely: a contribution's amount appears **nowhere** in the transaction — not as a field, not as a range — and the published key opens the fund **itemized**, which is what "glass" means here. Every arrow above is claimed with its on-chain evidence in [§8](#8-limitations-read-this-part), including the uncomfortable one — the custodian key.*
 
 A privacy wallet reconstructs its state by replaying contract events — and Soroban RPC nodes forget them after about 7 days. So this submission ships its own memory: **Raiz Memory**, a durable `getEvents`-shaped index that any wallet adopts by changing one URL.
 
@@ -40,6 +50,15 @@ The reference implementation of Confidential Tokens has already lost its own ear
 
 Its configured set is four testnet contracts at once: our CT wrapper, our `goal_meta`, the official CT demo wrapper, and `CCUUDM43…MCGZ` — the **EURC token SAC** that Nethermind's SPP EURC pool settles through (`tokenContractId` in [`deployments/testnet/deployments.json`](https://github.com/NethermindEth/stellar-private-payments), vendored). To be exact: their *pool* contracts are deployed and still emit zero events, so there is nothing to index there yet; the SAC is the busy contract next to them, and adding it was one line of `CONTRACT_IDS`. Measured on 2026-08-04: **4,425 events archived**, of which **911 sit below the RPC's retention floor** (ledger `3847121` at that moment) — 36 from the official CT demo wrapper, 875 from the EURC SAC. No public RPC can return those 911 any more. The count grows every hour, because the floor does.
 
+```mermaid
+flowchart LR
+    A["ledger 3013364<br/>the official CT demo<br/>wrapper is deployed"] --> B["on chain forever, but no public<br/>RPC will serve these events"] --> C["retention floor 3847121 on 2026-08-04,<br/>and it slides forward every day"] --> D["the ~7-day window<br/>any RPC answers here"] --> E["chain head<br/>3968080"]
+    B -.->|"911 events from down here, and rising,<br/>because the floor rises"| RM["Raiz Memory /events: 4,425 events archived<br/>on 2026-08-04, one getEvents-shaped<br/>endpoint for the whole range"]
+    D -.-> RM
+```
+
+*The history is permanent; the queryable window is not. Everything left of the floor is unreachable through `getEvents` — and the floor moves right every day, so the set only ever grows.*
+
 ## 3. Deployed reality (Stellar testnet)
 
 | What | Contract id | Code | Deployed by |
@@ -63,7 +82,31 @@ We deployed **our own instance** of the OZ stack for one reason: on the official
 
 ### On-device milestone — 4/4 real transactions from a phone
 
-Vivo Y21 (Android 13, 4 GB RAM, 8 cores), 2026-08-03. The WebView does only secret-free work (witness → proof → payload encode → build/simulate) and returns an **unsigned** envelope; Kotlin holds the seed in `EncryptedSharedPreferences`, signs it, and submits over JSON-RPC. All `SUCCESS`, against our own wrapper:
+```mermaid
+sequenceDiagram
+    participant U as Neighbor
+    participant W as WebView (prover + verifier)
+    participant K as Kotlin app
+    participant C as Testnet (CT wrapper, RPC)
+    participant R as Raiz Memory
+    Note over W: computes only - holds no key, persists nothing
+    Note over K: holds the seed in EncryptedSharedPreferences
+    U->>W: tap "Aportar"
+    W->>W: build the witness, then the ZK proof - 10 to 17 s on this phone
+    W->>K: UNSIGNED envelope, already built and simulated
+    K->>K: sign - the seed never crosses this line
+    K->>C: sendTransaction over JSON-RPC
+    C-->>K: SUCCESS at ledger N - the event carries ciphertext, no amount
+    R->>C: getEvents, polling
+    C-->>R: the event, kept past the 7-day window
+    R-->>W: the goal's aportes (events)
+    C-->>W: the goal's live Pedersen commitments (state)
+    W->>U: timeline row (who and when) and a re-verified total
+```
+
+*One contribution, from the tap to the total moving. The split is the design decision: the prover computes and persists nothing, the app holds the only secret and signs.*
+
+Vivo Y21 (Android 13, 4 GB RAM, 8 cores), 2026-08-03. All four `SUCCESS`, against our own wrapper:
 
 | Op (UX name) | Tx | Ledger | Wall clock | ZK proof |
 |---|---|---|---|---|
@@ -144,7 +187,17 @@ Real output, run on 2026-08-04 (abridged in the middle — seven contributions, 
 Goal total: 63 XLM — verified on-chain at ledger 3968046
 ```
 
-Decryption alone would prove nothing (a script can print any number), so: the published key is authenticated against **two** independent on-chain records, each contribution is decrypted into a full Pedersen *opening* (`v`, `r_tx`), and the accumulated openings are re-committed and compared against the goal's live on-chain commitments. Pedersen commitments are binding, so a match means the chain itself is committed to those amounts.
+```mermaid
+flowchart TB
+    K["The published view key k1"] --> A1["goal_meta goal 1 stores k1·H"] --> AUTH["key authenticated against two<br/>independent on-chain records"]
+    K --> A2["auditor registry id 1 holds k1·H"] --> AUTH
+    EV["Events: every confidential_transfer into the goal"] --> DEC["decrypt each with k1 into a full<br/>Pedersen opening (v, r_tx)"]
+    AUTH --> DEC --> SUM["sum the openings, re-commit"] --> CMP{"does it equal the goal's live<br/>on-chain commitments?"}
+    CMP -->|"yes - Pedersen is binding, so the chain<br/>itself is committed to those amounts"| GOOD["Goal total: 63 XLM,<br/>verified on-chain at ledger 3968046"]
+    CMP -->|"no - one event was missing"| BAD["MISMATCH, and no number is printed.<br/>A truncated source cannot quietly<br/>produce a smaller total."]
+```
+
+*Decryption alone would prove nothing — a script can print any number. Drop one contribution and the re-commitment misses, loudly: a truncated event source cannot quietly yield a smaller total, which is exactly why the index matters.*
 
 **What Raiz Memory does and does not rescue here.** This check needs two different things: the **events** (the contributions, which the RPC drops after ~7 days) and **chain state** (the goal's live commitments, the auditor-registry key, `goal_meta`'s stored point — which any RPC still serves, because state is not events). Raiz Memory makes the first durable; it is *not* an RPC and never pretends to be — it answers exactly three GET routes, `/health`, `/coverage` and `/events` ([`raiz-memory/src/main.rs:90-92`](raiz-memory/src/main.rs)), so pointing `--rpc` at it would 404 on the state reads. The app already splits the two: the in-wallet verification takes its events from a configurable source (Raiz Memory or the RPC) and its state from an RPC — see `eventsUrl` vs `rpcUrl` in [`raiz-shim.js`](wallet/app/src/main/assets/prover/raiz-shim.js). This CLI script is the single-source version and inherits the RPC's window: past it, `[2]` finds no contributions and says so instead of printing a number. Giving it the same split is a small, deliberate post-video change (`BACKLOG.md`).
 
