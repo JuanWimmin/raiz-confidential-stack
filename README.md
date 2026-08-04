@@ -301,7 +301,7 @@ Nothing else came from RAÍZ. Its Stellar stack (Soneso SDK, Hilt, navigation-co
 - the three screens, their view models, the SCVal decoder and the event-source layer — the RAÍZ files above are components those screens are built *from*, not the screens
 - the **published-view-key pattern** (auditor id 1 as the goal's public auditor) and the deployment model it implies
 - `scripts/`: `ct-flow` (own-instance deploy, full cycle, view-key audit, envelope visibility), `verify-goal-total`, `receipt`, `prover-bench`, `goal-flow.sh`
-- [`friction-report.md`](friction-report.md) and the 10 issue drafts in [`docs/issues-drafts/`](docs/issues-drafts/)
+- [`friction-report.md`](friction-report.md) and the issue drafts in [`docs/issues-drafts/`](docs/issues-drafts/), five of them now filed upstream ([§9](#9-friction-filed-back))
 
 ## 8. Limitations (read this part)
 
@@ -321,7 +321,19 @@ Nothing else came from RAÍZ. Its Stellar stack (Soneso SDK, Hilt, navigation-co
 
 [`friction-report.md`](friction-report.md) logs every friction we hit with the CT/SPP previews and the surrounding tooling, with **verbatim** error messages, versions and repro steps — 15 entries covering the admin-gated auditor registry, the silently single-threaded prover, the WebView isolation gap, an RPC filter that rejects a whole call because of one bad id, a `--optimize=false` flag the current CLI no longer accepts, an `InsufficientRefundableFee` on a first TTL-bumping submission, a retention floor that moves *while you use it*, and the Android trust-anchor issue above.
 
-Ten of them are written up as ready-to-file issue drafts in [`docs/issues-drafts/`](docs/issues-drafts/), each naming its target repo: 5 for the CT demo, 1 for `OpenZeppelin/stellar-contracts`, 2 for `stellar/stellar-rpc`, 2 for `stellar/stellar-cli`. They are drafts on purpose: filing a bug under a stranger's repo is a human's call, one by one, and none has been posted yet. A preview's most useful hackathon output is a precise bug report, so this is a deliverable, not an appendix.
+Ten were written up as issue drafts in [`docs/issues-drafts/`](docs/issues-drafts/). Before filing any of them we re-verified every claim against current tooling — and **five did not survive**, which is the part worth reading. Our `stellar` CLI was 23.2.1 while the current release is 27.1.0, four majors newer and above the CT demo's own documented prerequisite of ≥ 25.2. Three drafts existed only because of that stale binary; one of them, `--optimize=false`, would have reported our failure to meet a documented prerequisite as somebody else's bug. A fourth blamed OpenZeppelin for an access-control gate that lives in the demo's contract, not theirs. Each dropped draft keeps its disproof in the file.
+
+The five that held up are filed:
+
+| Issue | What it reports |
+|---|---|
+| [stellar-rpc#918](https://github.com/stellar/stellar-rpc/issues/918) | `simulateTransaction` under-sizes the refundable fee on TTL-extending calls — 4 of 8 consecutive runs fail, alternating |
+| [stellar-rpc#919](https://github.com/stellar/stellar-rpc/issues/919) | One malformed `contractId` rejects a whole `getEvents` batch, named only by index |
+| [stellar-confidential-token-demo#4](https://github.com/brozorec/stellar-confidential-token-demo/issues/4) | `CircuitProver` proves single-threaded even when isolation succeeds — a 2-3× tax, in two lines of code |
+| [stellar-contracts#832](https://github.com/OpenZeppelin/stellar-contracts/issues/832) | Docs: view keys are per-deployment, not per-account, and what the recipient channel actually reveals |
+| [stellar-contracts#833](https://github.com/OpenZeppelin/stellar-contracts/issues/833) | Docs: Android WebView cannot be cross-origin isolated, so embedded clients always prove single-threaded |
+
+A preview's most useful hackathon output is a precise bug report — and the discipline that throws half of them away.
 
 ## 10. Demo & deployment
 
