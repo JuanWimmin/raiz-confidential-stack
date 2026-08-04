@@ -187,7 +187,10 @@ a{color:inherit}
 .grillete{transform-origin:center;animation:forcejeo 4.6s ease-in-out infinite}
 
 /* --- la sección que se desgarra ------------------------------------------ */
-.olvido{display:grid;gap:2px;margin-top:calc(var(--u)*1.5);border:1px solid var(--borde);background:var(--borde)}
+/* Sin `gap`: una fila colapsada mide cero, pero su hueco de rejilla no, y cinco
+   de esos huecos dejaban una banda fantasma sobre la lista. Los separadores van
+   como borde de la propia fila, así desaparecen con ella. */
+.olvido{display:grid;gap:0;margin-top:calc(var(--u)*1.5);border:1px solid var(--borde);background:var(--tinta-2)}
 .ev{background:var(--tinta-2);padding:13px 16px;display:grid;grid-template-columns:1fr auto;
   align-items:baseline;gap:6px 14px;font-family:'Space Mono',monospace;font-size:.72rem;color:var(--niebla);
   position:relative;overflow:hidden}
@@ -213,14 +216,15 @@ a{color:inherit}
 /* Segundo tiempo: la fila no se queda en blanco, se va. Un hueco vacío se lee
    como un fallo de maquetación; el colapso se lee como lo que es — historia
    que ya no está. */
+.ev+.ev{border-top:1px solid var(--borde)}
 .ev.ida{
   padding-block:0;font-size:0;opacity:0;
-  max-height:0;border:0;
-  transition:max-height .34s cubic-bezier(.6,0,.2,1),padding-block .34s,font-size .34s;
+  max-height:0;border-top-width:0;
+  transition:max-height .34s cubic-bezier(.6,0,.2,1),padding-block .34s,font-size .34s,border-top-width .34s;
 }
-.ev:not(.ida){max-height:120px;transition:max-height .34s cubic-bezier(.6,0,.2,1),padding-block .34s,font-size .34s}
+.ev:not(.ida){max-height:120px;transition:max-height .34s cubic-bezier(.6,0,.2,1),padding-block .34s,font-size .34s,border-top-width .34s}
 .olvido__pie{background:var(--tinta-2);padding:15px 16px;font-family:'Space Mono',monospace;
-  font-size:.7rem;color:var(--falla);line-height:1.7;border-top:1px solid var(--borde)}
+  font-size:.7rem;color:var(--falla);line-height:1.7;border-top:1px solid var(--borde-vivo)}
 .olvido__pie.ok{color:var(--verde-vivo)}
 
 .mando{display:flex;flex-wrap:wrap;gap:10px;margin-top:var(--u);align-items:center}
