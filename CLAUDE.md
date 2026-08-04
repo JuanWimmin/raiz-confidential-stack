@@ -232,7 +232,19 @@ Sesión 5 (bridge WebView):      [x]  COMPLETA. Pasos 1-4: bridge real desde ass
                                      Android 13 sin raíz Sectigo R46 de *.stellar.org
                                      → networkSecurityConfig con raíz pública
                                      empaquetada (mata a cualquier wallet nativa).
-Sesión 6 (pantallas+integración):[ ]
+Sesión 6 (pantallas+integración):[x]  3 pantallas vivas con diseño de RAÍZ
+                                     (tema+componentes adoptados, stack NO) ·
+                                     Meta calcula el TOTAL EN LA APP con la view
+                                     key publicada y lo verifica contra los
+                                     compromisos on-chain: 55 XLM @ ledger 3959660,
+                                     5 checks [OK] en pantalla, leyendo de Raiz
+                                     Memory (no del RPC) · timeline quién/cuándo
+                                     con candado y "•••" donde iría el monto ·
+                                     switch de fuente en vivo (Raiz Memory declara
+                                     su cobertura; RPC simulado declara qué olvidó)
+                                     · Mi Sobre con progreso honesto de prueba ·
+                                     Cosechar admin · 13 capturas ui-*.png
+                                     FALTA: ensayo cronometrado (guion de video)
 Sesión 7 (verify script+recibo):[x]  verify-goal-total REAL: "Goal total: 50 XLM —
                                      verified on-chain at ledger 3952632" (k1
                                      cotejada contra goal_meta Y registro auditor;
