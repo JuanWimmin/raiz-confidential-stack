@@ -66,12 +66,24 @@
  *     const r = JSON.parse(require('fs').readFileSync('receipt.json','utf8')); \
  *     console.log(k.pR.x === r.request.pR.x && k.pR.y === r.request.pR.y); })"
  *
- * Expected: true.  (Checked 2026-08-04; P_R.x = 0x17a22e23a3702f77…)
+ * Expected: true.  (Checked 2026-08-04; P_R.x = 0x005deae8d3dce328…)
+ *
+ * ---------------------------------------------------------------------------
+ * PROVENANCE — why this particular scalar
+ * ---------------------------------------------------------------------------
+ * This keypair was generated on 2026-08-04 for the sole purpose of being
+ * published here, and `receipt.json` was re-sealed to it. It has never existed
+ * anywhere else. An earlier revision of this file shipped a scalar that had
+ * been living in the gitignored `.env.deploy`; that one was rotated out for
+ * hygiene rather than for danger — the rule "what is in .env.deploy stays in
+ * .env.deploy" is worth more than the exception. The old scalar remains in git
+ * history and remains harmless: it only ever opened this same 25 XLM, and the
+ * receipt it opened no longer exists.
  */
 
 /** Grumpkin scalar `r_R` of the demo verifier. Public on purpose — see above. */
 export const DEMO_VERIFIER_SECRET_HEX =
-  "0x008241f7151f1df002fdc3697379dfdf75fa983006c45b8a0af7ba4353c9dca7";
+  "0x00b97bacce7fe9dd24cc6b347a97d71770522c49cd83453afb36ac39add50601";
 
 /** One line for the scripts to print, so a reader is never misled about it. */
 export const DEMO_VERIFIER_BANNER =
