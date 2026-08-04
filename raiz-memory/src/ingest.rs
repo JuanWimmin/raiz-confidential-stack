@@ -2,18 +2,29 @@
 //! persists raw events, advances the cursor. Testnet-flaky-proof: every error
 //! backs off and retries; the cursor only advances after a successful write.
 
-use crate::{db, rpc::RpcClient};
+use crate::{backfill::StartSpec, db, rpc, rpc::RpcClient};
 use sqlx::SqlitePool;
 use std::time::Duration;
 
 const PAGE_LIMIT: u32 = 100;
 
-pub async fn run(pool: SqlitePool, rpc_url: String, contract_id: String, poll_secs: u64) {
+/// How many times one tick will re-clamp its start ledger before giving up.
+/// The retention floor advances one ledger per ~5s, so a single retry is
+/// normally enough; a handful covers a slow round trip without spinning.
+const MAX_CLAMP_RETRIES: u8 = 3;
+
+pub async fn run(
+    pool: SqlitePool,
+    rpc_url: String,
+    contract_id: String,
+    poll_secs: u64,
+    start_spec: StartSpec,
+) {
     let rpc = RpcClient::new(rpc_url);
-    tracing::info!(%contract_id, "ingestor started");
+    tracing::info!(%contract_id, start = start_spec.mode(), "ingestor started");
 
     loop {
-        if let Err(e) = tick(&pool, &rpc, &contract_id).await {
+        if let Err(e) = tick(&pool, &rpc, &contract_id, start_spec).await {
             tracing::warn!(%contract_id, error = %e, "tick failed, backing off");
             tokio::time::sleep(Duration::from_secs(poll_secs * 3)).await;
             continue;
@@ -24,23 +35,55 @@ pub async fn run(pool: SqlitePool, rpc_url: String, contract_id: String, poll_se
 
 // pub(crate) so the integration tests (src/tests.rs) can drive single ingest
 // batches deterministically against a mock RPC — `run` itself never returns.
-pub(crate) async fn tick(pool: &SqlitePool, rpc: &RpcClient, contract_id: &str) -> anyhow::Result<()> {
+pub(crate) async fn tick(
+    pool: &SqlitePool,
+    rpc: &RpcClient,
+    contract_id: &str,
+    start_spec: StartSpec,
+) -> anyhow::Result<()> {
     let (cursor, last_ledger) = db::get_cursor(pool, contract_id).await?;
 
-    // First run: start at the current ledger (the RPC rejects startLedger outside
-    // its retention window). Backfill of older history, if an archive is available,
-    // is a stretch goal — until then /coverage declares exactly where we begin.
-    let start = if cursor.is_none() && last_ledger == 0 {
-        let latest = rpc.get_latest_ledger().await?;
-        tracing::info!(%contract_id, latest, "first run — starting at current ledger");
-        Some(latest)
+    // Backfill is a FIRST-RUN-ONLY decision: it applies when this contract has
+    // no cursor and nothing scanned. If either exists we resume from it, so a
+    // restart can never rewind a live tail back into history it already holds.
+    let mut start = if cursor.is_none() && last_ledger == 0 {
+        let plan = crate::backfill::resolve(rpc, contract_id, start_spec).await?;
+        db::record_backfill_mark(pool, contract_id, &plan).await?;
+        Some(plan.effective)
     } else {
         Some(last_ledger)
     };
 
     let mut cursor = cursor;
+    let mut clamp_retries = 0u8;
     loop {
-        let page = rpc.get_events(contract_id, start, cursor.as_deref(), PAGE_LIMIT).await?;
+        let page = match rpc.get_events(contract_id, start, cursor.as_deref(), PAGE_LIMIT).await {
+            Ok(page) => page,
+            Err(e) => {
+                // The retention floor slides forward every ~5s, so the floor we
+                // resolved a moment ago may already be stale by the time this
+                // call lands and the RPC answers -32600 with the new range
+                // (observed live 2026-08-03). Re-clamp from the error and retry
+                // rather than failing the tick — but only while we are still
+                // starting by ledger; a cursor rejection is a real error.
+                let range = rpc::parse_ledger_range_error(&e.to_string());
+                match (cursor.is_none(), range) {
+                    (true, Some((oldest, _))) if clamp_retries < MAX_CLAMP_RETRIES => {
+                        clamp_retries += 1;
+                        tracing::warn!(
+                            %contract_id,
+                            asked = start.unwrap_or(0),
+                            clamped_to = oldest,
+                            "start ledger fell behind the RPC retention floor mid-flight; re-clamping",
+                        );
+                        start = Some(oldest);
+                        db::reclamp_backfill_mark(pool, contract_id, oldest).await?;
+                        continue;
+                    }
+                    _ => return Err(e),
+                }
+            }
+        };
         let n = page.events.len();
 
         for ev in &page.events {

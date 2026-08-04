@@ -7,7 +7,11 @@ services:
     volumes:
       - raiz_memory_data:/data
     environment:
+      # Both of these deliberately override .env: the database belongs on the
+      # named volume, and the port must match the mapping above (a local .env
+      # written for `cargo run` may well set PORT to something else).
       DATABASE_URL: sqlite:///data/raiz_memory.db?mode=rwc
+      PORT: 8090
     restart: unless-stopped
 
 volumes:

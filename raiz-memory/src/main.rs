@@ -7,10 +7,16 @@
 //!   DATABASE_URL       e.g. sqlite://raiz_memory.db?mode=rwc
 //!   POLL_INTERVAL_SECS default 5
 //!   PORT               default 8090
+//!   BACKFILL_FROM_LEDGER          how far back a contract's first run reaches
+//!                      when it has no entry in CONTRACT_START_LEDGERS:
+//!                      `oldest` (default) | `head` | an explicit ledger.
+//!   CONTRACT_START_LEDGERS        per-contract overrides, comma-separated
+//!                      `CONTRACTID:LEDGER` (LEDGER may be `oldest`/`head`).
 //!   RETENTION_SIMULATION_LEDGERS  optional; enables the purge-demo mode
 //!                      (see README "Purge demo mode"): requests carrying
 //!                      `source=rpc-simulation` only see the last N ledgers.
 
+mod backfill;
 mod db;
 mod ingest;
 mod rpc;
@@ -56,6 +62,9 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|v| v.parse().ok())
         .unwrap_or(5);
     let port: u16 = std::env::var("PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(8090);
+    // Parsed before anything else touches the network: a typo here is a startup
+    // error, never a silently empty index.
+    let start_ledgers = backfill::StartLedgerConfig::from_env(&contract_ids)?;
     let retention_simulation_ledgers: Option<i64> = std::env::var("RETENTION_SIMULATION_LEDGERS")
         .ok()
         .and_then(|v| v.parse().ok());
@@ -70,8 +79,10 @@ async fn main() -> anyhow::Result<()> {
     for cid in contract_ids {
         let pool = pool.clone();
         let rpc = rpc_url.clone();
+        let start_spec = start_ledgers.for_contract(&cid);
+        tracing::info!(contract_id = %cid, start = ?start_spec, "indexing contract");
         tokio::spawn(async move {
-            ingest::run(pool, rpc, cid, poll_secs).await;
+            ingest::run(pool, rpc, cid, poll_secs, start_spec).await;
         });
     }
 

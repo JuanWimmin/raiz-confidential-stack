@@ -24,6 +24,18 @@
 //!     "headerXdr", "metadataXdr" } — we only read `sequence`.
 //!   - an invalid contract id in a filter rejects the WHOLE call with
 //!     code -32602 "filter 1 invalid: contract ID N invalid" (see friction-report).
+//!
+//! Retention window, verified live 2026-08-03 (same node):
+//!   getHealth result: { "status": "healthy", "latestLedger": 3953872,
+//!     "latestLedgerCloseTime": "1785789293", "oldestLedger": 3832913,
+//!     "oldestLedgerCloseTime": "1785183187", "ledgerRetentionWindow": 120960 }
+//!   A startLedger below `oldestLedger` rejects the call with, verbatim:
+//!     { "code": -32600,
+//!       "message": "startLedger must be within the ledger range: 3832943 - 3953902" }
+//!   The floor slides forward by one ledger every ~5s, so a floor read a moment
+//!   ago can already be stale — measured 3832922 -> 3832936 -> 3832944 within a
+//!   couple of minutes (see friction-report). That is why the range is read
+//!   structurally AND parsed back out of the error as a retry safety net.
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -67,11 +79,32 @@ pub struct GetEventsResult {
     #[serde(rename = "pagingToken")]
     pub paging_token: Option<String>,
     /// Retention floor of this RPC (verified live 2026-08-02: ~7 days behind
-    /// head). Not consumed yet — first-run backfill from the retention floor
-    /// is a stretch goal (see ingest.rs); kept so the shape is documented.
-    #[allow(dead_code)]
+    /// head). Consumed by the backfill resolver as the fallback source of the
+    /// ledger range when `getHealth` is unavailable (see `ledger_range`).
     #[serde(rename = "oldestLedger")]
     pub oldest_ledger: Option<i64>,
+}
+
+/// The window of history this RPC can still serve, right now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LedgerRange {
+    pub oldest: i64,
+    pub latest: i64,
+}
+
+/// Pull `(oldest, latest)` out of the RPC's verbatim out-of-range complaint:
+///   "startLedger must be within the ledger range: 3832943 - 3953902"
+/// (code -32600, captured live 2026-08-03). Used only as a retry safety net —
+/// see `ledger_range` for why we do not depend on this string.
+pub fn parse_ledger_range_error(message: &str) -> Option<(i64, i64)> {
+    let tail = message.split("ledger range:").nth(1)?;
+    let mut numbers = tail
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|s| !s.is_empty())
+        .map(str::parse::<i64>);
+    let oldest = numbers.next()?.ok()?;
+    let latest = numbers.next()?.ok()?;
+    Some((oldest, latest))
 }
 
 /// The scan position encoded in a getEvents cursor: "TOID-eventIndex",
@@ -99,6 +132,41 @@ impl RpcClient {
     pub async fn get_latest_ledger(&self) -> anyhow::Result<i64> {
         let r = self.call("getLatestLedger", json!({})).await?;
         Ok(r.get("sequence").and_then(|v| v.as_i64()).unwrap_or(0))
+    }
+
+    /// How far back this RPC can still serve events — the backfill floor.
+    ///
+    /// Source of truth is `getHealth`, which returns `oldestLedger` and
+    /// `latestLedger` as *structured fields* (verified live 2026-08-03). We
+    /// prefer that over parsing the -32600 error message because the message
+    /// is prose: its wording is not part of any API contract and can change
+    /// between RPC builds, while the field name is the same one `getEvents`
+    /// already returns. The error text is still parsed
+    /// (`parse_ledger_range_error`) as a retry safety net, because the floor
+    /// moves while we work.
+    ///
+    /// Fallback for RPC builds whose `getHealth` omits the range: read
+    /// `oldestLedger` off a real `getEvents` response, which every version
+    /// carries — startLedger = head is always inside the window.
+    pub async fn ledger_range(&self) -> anyhow::Result<LedgerRange> {
+        if let Ok(health) = self.call("getHealth", json!({})).await {
+            let oldest = health.get("oldestLedger").and_then(|v| v.as_i64()).unwrap_or(0);
+            let latest = health.get("latestLedger").and_then(|v| v.as_i64()).unwrap_or(0);
+            if oldest > 0 && latest > 0 {
+                return Ok(LedgerRange { oldest, latest });
+            }
+        }
+
+        let head = self.get_latest_ledger().await?;
+        let probe = self
+            .call(
+                "getEvents",
+                json!({ "startLedger": head.max(1), "pagination": { "limit": 1 } }),
+            )
+            .await?;
+        let probe: GetEventsResult = serde_json::from_value(probe)?;
+        let latest = if probe.latest_ledger > 0 { probe.latest_ledger } else { head };
+        Ok(LedgerRange { oldest: probe.oldest_ledger.unwrap_or(latest).max(1), latest })
     }
 
     /// Fetch one page of contract events, either from a cursor or a start ledger.
