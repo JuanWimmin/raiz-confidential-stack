@@ -110,6 +110,26 @@ around logcat on this phone.
 Nothing below is optional; each item was a real failure mode during the
 rehearsal.
 
+### Pre-flight — 30 seconds, run it immediately before recording
+
+Every one of these failed at least once during preparation. Check them in this
+order and you will not lose a take:
+
+```powershell
+# 1. is the indexer alive and caught up?
+curl http://localhost:8091/health
+
+# 2. is the phone's configured source reachable FROM THE PHONE?
+#    (open Ajustes on the device: the URL under the title is the live one)
+
+# 3. does the Meta screen verify? It must say "Verificado contra los
+#    compromisos on-chain" with five [OK] — not "sin verificar"
+```
+
+If the hero says **sin verificar** while the source is Raiz Memory, the source
+is unreachable or behind — that is the app telling the truth, not a bug. Fix
+the source, do not restart the app.
+
 **Machine (Windows, repo root `C:\SP_WorkShop`)**
 
 1. Raiz Memory running on port 8091:
@@ -118,9 +138,25 @@ rehearsal.
    report a `scannedThroughLedger` within ~10 ledgers of the chain head.
 2. `raiz-memory\.env` has `RETENTION_SIMULATION_LEDGERS=2000`. Leave it at 2000
    (see the table above for what that buys narratively).
-3. `adb reverse tcp:8091 tcp:8091` established
-   (`%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe reverse --list` must show
-   `tcp:8091 tcp:8091`).
+3. **Use the public tunnel, not `adb reverse`, for the recording.** The USB
+   reverse tunnel silently dies whenever the device reconnects or the ADB
+   server restarts, and it takes the timeline down with it mid-take — which is
+   exactly how the first recording attempt failed. Instead:
+
+   ```powershell
+   pwsh scripts/serve-public.ps1        # prints a https://….trycloudflare.com URL
+   ```
+
+   Then on the phone: **⋮ → Ajustes → URL de Raiz Memory**, paste that URL,
+   **Guardar**. Verified: with the URL set, `adb reverse --remove-all` changes
+   nothing — the Meta screen still loads and still verifies (63 XLM at ledger
+   3970002, 24 events, five `[OK]`). The phone no longer depends on the cable,
+   which also means it can be picked up and moved on camera.
+
+   A real `https://` source on screen reads better than `localhost:8091`
+   anyway. The quick tunnel regenerates its hostname on every start, so do this
+   step *after* the last restart, and re-check Ajustes if anything is restarted
+   afterwards.
 4. The vendor SDK is built, so `verify-goal-total` runs in ~3 s instead of
    failing: `vendor/stellar-confidential-token-demo/packages/sdk/dist/` exists.
    Setup from a clean clone: `scripts/verify-goal-total/README.md`.
