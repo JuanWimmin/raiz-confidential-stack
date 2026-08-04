@@ -42,12 +42,26 @@ number. The D-sender proof is different in kind:
 | `verify-receipt.mjs` | The receiving party's §5.3 verification: VK pinning → on-chain event resolution → on-chain PVK reads → UltraHonk verify → decrypt |
 | `receipt.json` | The shareable artifact: plain-language claim + request + proof bundle (amount SEALED to the verifier) |
 | `_vendor.mjs` | Read-only imports of the vendor SDK dist + the shared `@ctd/disclosure` artifacts |
+| `demo-verifier-key.mjs` | The verifier scalar `r_R` this receipt is sealed to — **committed on purpose**, so the check below runs on a fresh clone |
 
 Setup is the same as `../verify-goal-total/README.md` (vendor clone +
-`npx -y pnpm@10.33.0 install` + `npx -y pnpm@10.33.0 build:sdk`). Proving
-additionally needs Marta's confidential scalar (`CT_MARTA_CONF_SK` in the
-gitignored `.env.deploy`); verifying needs only the verifier's own secret
-(`RECEIPT_VERIFIER_SECRET_HEX`, auto-generated on first `make-receipt` run).
+`npx -y pnpm@10.33.0 install` + `npx -y pnpm@10.33.0 build:sdk`).
+
+**Verifying works out of the box:** `node verify-receipt.mjs` needs no secrets
+of yours. Opening a receipt requires the verifier's own scalar `r_R`, so that
+scalar is committed in `demo-verifier-key.mjs` — otherwise the receipt shipped
+here would be cryptographically dead and this demo unrunnable. Publishing it is
+safe and deliberate: it is not a Stellar seed, holds no funds, signs nothing,
+and its only power is decrypting *this* receipt's amount — 25 XLM, a number
+already printed in plaintext above. It does **not** open Marta's balance or
+history, the goal's view key, or any other receipt. That file's header spells
+out the reasoning and the one real caveat (never reuse it as a real verifier
+key). Set `RECEIPT_VERIFIER_SECRET_HEX` in `.env.deploy` to override it.
+
+**Proving is the part you cannot reproduce**, by design: `make-receipt.mjs`
+needs Marta's confidential scalar `CT_MARTA_CONF_SK` (gitignored — it is her
+balance and her whole history, and testnet play-money is still a real secret
+here). The proof she already produced is committed as `receipt.json`.
 
 ## Real run (2026-08-03, testnet)
 

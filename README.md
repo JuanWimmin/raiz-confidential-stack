@@ -5,7 +5,7 @@
 
 **Stellar Summit SP 2026 · Special Bounty: Confidential-Token & Private-Payment Wallets · Team: Raiz Protocol**
 
-Everything below was executed against **Stellar testnet on 2026-08-03**. Every contract id, tx hash and timing is real and clickable; nothing here is a mockup.
+Everything below was executed against **Stellar testnet on 2026-08-03 and 2026-08-04**. Every contract id, tx hash, timing and screenshot is real and clickable; nothing here is a mockup. Chain-dependent counts say when they were measured, because they move.
 
 ---
 
@@ -27,16 +27,18 @@ A privacy wallet reconstructs its state by replaying contract events — and Sor
 >
 > — [NethermindEth/stellar-private-payments](https://github.com/NethermindEth/stellar-private-payments), `README.md` L121 (vendored @ `a1bf177`)
 
-Not hypothetical. The **official** CT demo wrapper was deployed at ledger `3013364`; ask the public RPC for its history today (`getEvents`, `startLedger: 3013364`) and you get:
+Not hypothetical. The **official** CT demo wrapper was deployed at ledger `3013364`; ask the public RPC for its history (`getEvents`, `startLedger: 3013364`) and you get — captured 2026-08-04, and the range slides forward every day:
 
 ```json
 {"jsonrpc":"2.0","id":1,"error":{"code":-32600,
- "message":"startLedger must be within the ledger range: 3832437 - 3953396"}}
+ "message":"startLedger must be within the ledger range: 3847121 - 3968080"}}
 ```
 
 The reference implementation of Confidential Tokens has already lost its own early history.
 
-**How Raiz Memory differs from Nethermind's `tools/bootnode`.** Their bootnode is a deployment-scoped archive proxy for *their* wallet: it caches `getEvents` pages for one SPP deployment and, once a request is back inside the retention window, hands the client to its main RPC with a JSON-RPC `-32002` error. A sync-gap patch, and a good one. Raiz Memory is a **general durable index**: any contract id, no handoff, one `getEvents`-shaped endpoint answering for the whole life of a contract, plus `/coverage` stating honestly what it holds. Its configured set is four testnet contracts at once — our CT wrapper, our `goal_meta`, the official CT demo wrapper, and Nethermind's SPP EURC pool; in Session 2 it archived 3,630 real events from the last two alone, and adding SPP was one line of `CONTRACT_IDS`.
+**How Raiz Memory differs from Nethermind's `tools/bootnode`.** Their bootnode is a deployment-scoped archive proxy for *their* wallet: it caches `getEvents` pages for one SPP deployment and, once a request is back inside the retention window, hands the client to its main RPC with a JSON-RPC `-32002` error. A sync-gap patch, and a good one. Raiz Memory is a **general durable index**: any contract id, no handoff, one `getEvents`-shaped endpoint answering for the whole life of a contract, plus `/coverage` stating honestly what it holds.
+
+Its configured set is four testnet contracts at once: our CT wrapper, our `goal_meta`, the official CT demo wrapper, and `CCUUDM43…MCGZ` — the **EURC token SAC** that Nethermind's SPP EURC pool settles through (`tokenContractId` in [`deployments/testnet/deployments.json`](https://github.com/NethermindEth/stellar-private-payments), vendored). To be exact: their *pool* contracts are deployed and still emit zero events, so there is nothing to index there yet; the SAC is the busy contract next to them, and adding it was one line of `CONTRACT_IDS`. Measured on 2026-08-04: **4,425 events archived**, of which **911 sit below the RPC's retention floor** (ledger `3847121` at that moment) — 36 from the official CT demo wrapper, 875 from the EURC SAC. No public RPC can return those 911 any more. The count grows every hour, because the floor does.
 
 ## 3. Deployed reality (Stellar testnet)
 
@@ -92,11 +94,22 @@ Vivo Y21 (Android 13, 4 GB RAM, 8 cores), 2026-08-03. The WebView does only secr
 
 Related: the demo SDK's `CircuitProver` calls `UltraHonkBackend(bytecode)` with no options and bb.js 0.87 defaults to `{threads: 1}`, so the official demo proves single-threaded *even when* isolation succeeds. Our shim passes threads explicitly. Both findings: [`friction-report.md`](friction-report.md).
 
+### What that looks like on the phone
+
+Real screenshots, same device. The UI is in Spanish because the users are — *Abrir mi sobre* = `register`, *Sellar* = `deposit`, *Aportar* = `confidential_transfer`, *Cosechar* = `merge`.
+
+| | |
+|:--:|:--:|
+| <img src="docs/spike-evidence/fix-01c-total-coherente-tras-aporte.png" width="270"> | <img src="docs/spike-evidence/ui-07-vuelve-raiz-memory.png" width="270"> |
+| **Meta.** 63 XLM, verified *inside the wallet* at ledger 3966806: the view key checked against `goal_meta` and against the CT auditor registry, then both Pedersen commitments re-derived from the decrypted openings. Five `[OK]`s, printed where other wallets print a number and ask for trust. | **The timeline, and where it comes from.** Who and when, never how much — the lock-and-ellipsis pill sits exactly where the amount would go, because the on-chain event does not carry one. The source switch (Raiz Memory ↔ a forgetful RPC) is a live control, not a slide. |
+| <img src="docs/spike-evidence/ui-06b-sin-verificar-explicado.png" width="270"> | <img src="docs/spike-evidence/demo-06-proof-progress.png" width="270"> |
+| **A source that forgot.** Point the app at the forgetful RPC and the two commitment checks fail, so the wallet refuses to show a total: *"the money is there — what is missing are the events."* Refusing to print an unprovable number is the feature. | **Honest proof progress.** A confidential contribution takes ~10–17 s of single-threaded proving on this phone, so the UI says so, counts the seconds, and names the stage instead of showing a spinner and hoping. |
+
 ## 5. Don't trust our UI
 
 ### Verify the goal total yourself
 
-Reconstructs and **verifies** the fund from the public RPC and the published key alone — it never talks to our app or any server we run. Setup ≈ 15 minutes, most of it one `pnpm install` ([`scripts/verify-goal-total/README.md`](scripts/verify-goal-total/README.md)):
+Reconstructs and **verifies** the fund from the public RPC and the published key alone — it never talks to our app or any server we run. The check itself takes **~2 s** (timed); what costs time is the one-time vendor setup below, whose long pole is `pnpm install` of the demo's toolchain — network-bound, hundreds of MB, minutes on a cold cache; the `build:sdk` that follows takes ~4 s ([`scripts/verify-goal-total/README.md`](scripts/verify-goal-total/README.md)):
 
 ```sh
 git clone https://github.com/brozorec/stellar-confidential-token-demo vendor/stellar-confidential-token-demo
@@ -107,7 +120,7 @@ cd ../..
 node scripts/verify-goal-total/verify-goal-total.mjs
 ```
 
-Real output (testnet, ledger 3952632):
+Real output, run on 2026-08-04 (abridged in the middle — seven contributions, `25+25+5+2+2+2+2 = 63`, held on-chain as 50 XLM already merged into spendable plus 13 XLM still pending in the receiving channel):
 
 ```
 [1] cross-checking the published secret against on-chain state
@@ -120,17 +133,20 @@ Real output (testnet, ledger 3952632):
   · ledger 3950173  merge (cosecha): pending folded into spendable
   + ledger 3950262  aporte   from GDUTRP…DJ2I  25 XLM (decrypted via k1)  tx d302c02f…
   · ledger 3950263  merge (cosecha): pending folded into spendable
+  + ledger 3953087  aporte   from GDUDWS…DUXL   5 XLM (decrypted via k1)  tx 7f9c6f9a…
+  + ledger 3960072  aporte   from GDU644…L4C6   2 XLM (decrypted via k1)  tx 323dd7ce…
+  … three more 2 XLM contributions from GDU644…L4C6 …
 
 [3] re-committing decrypted openings against on-chain Pedersen commitments
   commit(500000000, Σr_tx) == on-chain spendable commitment   OK
-  commit(0, Σr_tx) == on-chain receiving commitment   OK
+  commit(130000000, Σr_tx) == on-chain receiving commitment   OK
 
-Goal total: 50 XLM — verified on-chain at ledger 3952632
+Goal total: 63 XLM — verified on-chain at ledger 3968046
 ```
 
 Decryption alone would prove nothing (a script can print any number), so: the published key is authenticated against **two** independent on-chain records, each contribution is decrypted into a full Pedersen *opening* (`v`, `r_tx`), and the accumulated openings are re-committed and compared against the goal's live on-chain commitments. Pedersen commitments are binding, so a match means the chain itself is committed to those amounts.
 
-Point `--rpc` at a Raiz Memory instance instead of the RPC and the same verification keeps working after the 7-day window closes. That is the whole thesis, in one flag.
+**What Raiz Memory does and does not rescue here.** This check needs two different things: the **events** (the contributions, which the RPC drops after ~7 days) and **chain state** (the goal's live commitments, the auditor-registry key, `goal_meta`'s stored point — which any RPC still serves, because state is not events). Raiz Memory makes the first durable; it is *not* an RPC and never pretends to be — it answers exactly three GET routes, `/health`, `/coverage` and `/events` ([`raiz-memory/src/main.rs:90-92`](raiz-memory/src/main.rs)), so pointing `--rpc` at it would 404 on the state reads. The app already splits the two: the in-wallet verification takes its events from a configurable source (Raiz Memory or the RPC) and its state from an RPC — see `eventsUrl` vs `rpcUrl` in [`raiz-shim.js`](wallet/app/src/main/assets/prover/raiz-shim.js). This CLI script is the single-source version and inherits the RPC's window: past it, `[2]` finds no contributions and says so instead of printing a number. Giving it the same split is a small, deliberate post-video change (`BACKLOG.md`).
 
 ### Verify a contributor's receipt
 
@@ -166,17 +182,21 @@ Flip one byte of the proof and it is `REJECTED at §5.3 stage [verify-proof]`. T
 /vendor        (gitignored) read-only clones of external repos
 ```
 
-**Raiz Memory** (Rust + SQLite, no external services):
+> **Fresh-clone prerequisite.** `/vendor` is gitignored, and everything except `raiz-memory` and `goal_meta` needs it: the vendor clone + `build:sdk` shown in [§5](#5-dont-trust-our-ui) is step zero for `scripts/*` **and** for the wallet's prover assets.
+
+**Raiz Memory** (Rust + SQLite, no external services — the only component with no prerequisites at all):
 
 ```bash
 cd raiz-memory
-cp .env.example .env          # set RPC_URL + CONTRACT_IDS (comma-separated)
-cargo run                     # or: docker compose up
-curl localhost:8090/health    # {"status":"ok","latest_indexed_ledger":N}
-curl localhost:8090/coverage  # per contract: what we actually hold
+cp .env.example .env               # RPC_URL + CONTRACT_IDS; the defaults are our four contracts
+RUST_LOG=info cargo run            # or: docker compose up — without RUST_LOG the backfill/clamp lines are invisible
+curl localhost:8090/health         # {"status":"ok","latest_indexed_ledger":N}
+curl localhost:8090/coverage       # per contract: what we hold, and what the RPC had already lost
 curl "localhost:8090/events?contractId=CBWSANZN…&startLedger=3950128"
-cargo test                    # 4 tests, offline (RPC mocked, throwaway SQLite)
+cargo test                         # 15 tests, offline (RPC mocked, throwaway SQLite)
 ```
+
+A first run backfills: each contract starts at `BACKFILL_FROM_LEDGER` / `CONTRACT_START_LEDGERS`, not at the chain head. Asking for history the RPC has already dropped is clamped, not fatal — on a clean database today the CT demo wrapper logs `backfill CLAMPED … 833747 ledgers of history were already gone before this index existed`, and `/coverage` keeps saying so forever.
 
 Purge demo: start with `RETENTION_SIMULATION_LEDGERS=120`, then compare `…/events?contractId=…&source=rpc-simulation` (an RPC that forgets, complete with an `oldestLedger` floor) against the same URL without the parameter (Raiz Memory that remembers). Only requests carrying that parameter are affected.
 
@@ -189,18 +209,19 @@ stellar contract build
 bash ../../scripts/goal-flow.sh   # create_goal → get_goal → record_harvest → verify via getEvents
 ```
 
-**Scripts** (`verify-goal-total`, `receipt`, `ct-flow`, `prover-bench`) all need the vendor clone + `build:sdk` shown in [§5](#5-dont-trust-our-ui). `verify-goal-total` needs no proving backend at all; `receipt` and `ct-flow` additionally read secrets from a gitignored `.env.deploy`.
+`goal-flow.sh` reads a gitignored `.env.deploy` at the repo root and refuses to start without `GOAL_META_CONTRACT_ID`, `GOAL_META_DEPLOYER_SECRET` and `GOAL_META_DEPLOYER_PUBLIC` (optional: `GOAL_ACCOUNT`, `VIEW_KEY_HEX`). `verify-goal-total` needs no secrets and no proving backend; `receipt` and `ct-flow` read `.env.deploy` too.
 
 **Wallet**:
 
 ```powershell
-node wallet/tools/build-prover-assets.mjs   # packs bb.js/wasm/circuits from /vendor (~13 MB, gitignored)
+node wallet/tools/build-prover-assets.mjs   # packs bb.js/wasm/circuits from /vendor (~16.4 MB, gitignored)
 cd wallet
+"sdk.dir=C\:\\Users\\you\\AppData\\Local\\Android\\Sdk" > local.properties  # or set ANDROID_HOME; it is gitignored
 $env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'   # a JDK 17-21; PATH Java 25 cannot run Gradle 8.10.2
 .\gradlew.bat :app:assembleDebug            # macOS/Linux: JAVA_HOME=... ./gradlew :app:assembleDebug
 ```
 
-Install, launch, tap the operations. The app currently ships a working **debug console** — the four real CT operations above plus locally decrypted balances — not the final UI. `TODO(session-6): replace with the Metas / Aportar / Mi Sobre screens and the Raiz Memory-backed contribution timeline (configurable event-source URL).`
+Install and launch. Three screens, in the RAÍZ visual language ([§7](#7-reused-vs-original)): **Meta** — the goal's total, *verified inside the wallet* against the on-chain commitments (the same five checks the CLI script runs), a contribution timeline of who and when, and a live switch between event sources; **Mi Sobre** — the locally decrypted balance and the four CT operations with honest proof progress; **Cosechar** — folding pending contributions into spendable. The event-source URL is editable in Ajustes, which is what makes the purge scene a demo instead of a slide.
 
 ## 7. Reused vs. original
 
@@ -210,15 +231,21 @@ Install, launch, tap the operations. The app currently ships a working **debug c
 |---|---|---|
 | [OpenZeppelin/stellar-contracts](https://github.com/OpenZeppelin/stellar-contracts) (branch `feat/confidential-verifier-ultrahonk`) | `9b5ed96` | CT wrapper, auditor registry, Noir circuits; deployed from vendor-built WASM + verification keys |
 | [brozorec/stellar-confidential-token-demo](https://github.com/brozorec/stellar-confidential-token-demo) | `ac67499` | proving stack (`@aztec/bb.js` 0.87.0, `@noir-lang/noir_js` 1.0.0-beta.9), SDK witness builders, auditor decryption, `disclose_sender` disclosure artifacts |
-| [NethermindEth/stellar-private-payments](https://github.com/NethermindEth/stellar-private-payments) | `a1bf177` | read-only reference; its testnet pool is one of the contracts Raiz Memory indexes |
+| [NethermindEth/stellar-private-payments](https://github.com/NethermindEth/stellar-private-payments) | `a1bf177` | read-only reference; the retention quote above, and the deployment file that names the EURC SAC Raiz Memory indexes |
 
-**Declared prior team work:** RAÍZ, our pre-existing Android app (Kotlin, passkeys via the OZ Smart Account Kit) and its Soroban contracts. It is why we could target mobile at all — with an honest boundary: the module in `/wallet` here was written from scratch for this bounty and imports no RAÍZ code yet; folding this CT layer back into RAÍZ is post-summit work.
+**Declared prior team work — RAÍZ, and exactly what we took from it.** RAÍZ is our pre-existing Android app (Kotlin, Compose, passkeys via the OZ Smart Account Kit) and its Soroban contracts. It is why we could target mobile at all. Concretely, **11 files of its design system were adopted into this app** (~1,000 lines including headers), each carrying a header naming its RAÍZ source and any edit — the audit trail is [`docs/raiz-reuse-plan.md`](docs/raiz-reuse-plan.md), written before a line was copied:
+
+- verbatim but for the `package` line: `ui/theme/Color.kt` · `ui/theme/Type.kt` · `ui/theme/Theme.kt` (one identifier renamed) · `ui/util/StellarExpert.kt` · `ui/components/StatBox.kt`
+- copied with a named edit: `ui/components/SobreCard.kt` (RAÍZ `BalanceCard`) · `GoalProgressBar.kt` (`UsageBar`) · `AporteRow.kt` (`ExecutionRow` — **with the amount `Text` deleted**, which is the whole product) · `VerifyRow.kt` (`ContratoFila`) · `PhaseBanner.kt` (`AccountSetupBanner`) · `StepFeedback.kt` (`ActionFeedback`)
+
+Nothing else came from RAÍZ. Its Stellar stack (Soneso SDK, Hilt, navigation-compose) was deliberately *not* adopted — `raiz-reuse-plan.md §"Do NOT copy"` — so the CT layer, custody, signing, RPC and indexer code below are ours, written here. Folding this CT layer back into RAÍZ is post-summit work.
 
 **Original, built for this bounty:**
 
 - `goal_meta` Soroban contract (13 tests, explicit TTL policy checked against the live testnet archival config)
-- **Raiz Memory** — the indexer, its `getEvents`-shaped API, `/coverage`, and the purge-demo mode
-- the Android CT layer: headless-WebView `ProverWebViewBridge` + APK-packaged proving assets, the JS shim, and native Kotlin key custody / Ed25519 signing / RPC submission
+- **Raiz Memory** — the indexer, its `getEvents`-shaped API, `/coverage`, the clamped backfill, and the purge-demo mode (15 tests)
+- the Android CT layer: headless-WebView `ProverWebViewBridge` + APK-packaged proving assets, the JS shim (including the in-wallet verification), and native Kotlin key custody / Ed25519 signing / RPC submission
+- the three screens, their view models, the SCVal decoder and the event-source layer — the RAÍZ files above are components those screens are built *from*, not the screens
 - the **published-view-key pattern** (auditor id 1 as the goal's public auditor) and the deployment model it implies
 - `scripts/`: `ct-flow` (own-instance deploy, full cycle, view-key audit, envelope visibility), `verify-goal-total`, `receipt`, `prover-bench`, `goal-flow.sh`
 - [`friction-report.md`](friction-report.md) and the 10 issue drafts in [`docs/issues-drafts/`](docs/issues-drafts/)
@@ -229,24 +256,26 @@ Install, launch, tap the operations. The app currently ships a working **debug c
 - **The published view key opens each contribution, not just the total.** `k1` opens the *recipient channel* of every transfer into the goal, yielding each contribution's amount and its randomness — anyone holding it audits the fund contribution by contribution. What `k1` does **not** open is the sender channel (demonstrated on-chain: `auditTransfer(k1).channelsAgree === false`), so contributor balances are unreadable with it. Read the promise as: *your contribution is invisible to the chain and to bystanders, and legible to the neighborhood's published key; your balance is not in it.*
 - **Contributors have an auditor too, and in this demo it is us.** CT requires every account to commit to an `auditor_id` at `register()`; contributors use id 0, the custodian key, which *does* open the sender channel (verified: amount + the sender's post-transfer balance). That key is private and stays private, but "private from us" is not a claim this deployment can make. It is a property of the preview's compliance design; a real community deployment must decide who holds id 0.
 - **`deposit` is public** ([§4](#what-the-explorer-can-and-cannot-see)) — moving XLM into a confidential balance reveals that amount. Only the contribution itself is confidential.
-- **Identities are visible by design.** That is CT's model, and here it is the feature. If you need counterparties hidden too, that is SPP's territory — which Raiz Memory also indexes.
+- **Identities are visible by design.** That is CT's model, and here it is the feature. If you need counterparties hidden too, that is SPP's territory — which Raiz Memory indexes the same way, one line of config. Stated precisely: today it indexes the EURC SAC that their pool settles through, because their pool contracts have emitted no events yet.
 - **No per-account view keys exist in the preview**: the unit is a contract-level `auditor_id`, admin-gated to mint (verified `Error #2000` on the official deployment). Our pattern therefore implies a deployment model — one CT wrapper per community, goal accounts under the published id.
 - **Proving is single-threaded in a WebView** (~10–17 s per proof on a 4 GB phone); the Chrome/PWA path is 2.6× faster and stays documented as the alternative.
-- **Raiz Memory has no backfill yet**: an ingestor's first run starts at the current ledger, so an instance must be started while the contract's history is still inside the RPC window. `/coverage` reports this rather than pretending.
+- **Raiz Memory backfills, but it cannot un-forget.** A first run reaches back to the ledger you configure — yet if the RPC has already dropped that range, the index starts at the RPC's floor and records permanently how much was unreachable (today, for the CT demo wrapper: `833747` ledgers). So an instance still has to exist *before* the window closes to hold the earliest history; what it holds after that, it holds forever. Honest wrinkle in our own deployment: the long-running instance we demo from predates the feature, so its contracts were already tailing and its `/coverage` carries no `backfill` object — a fresh instance's does, clamp note included.
 - **Receipts depend on event resolution**: the vendor verifier reads the event from an RPC, so a receipt older than the retention window stops verifying against a bare RPC. Wiring Raiz Memory in as that source is the obvious next step (`BACKLOG.md`, not done).
 - Goal custody in this demo is the team's key; production custody belongs in a communal smart account — roadmap, not faked here. And `goal_meta` goal id 0 is a dead placeholder: the real goal is id 1.
 - Worth flagging to any native Stellar mobile wallet: `*.stellar.org` chains to the Sectigo R46 root, **absent from many Android system trust stores**, so native HTTPS fails with `Trust anchor for certification path not found` while Chromium (which AIA-chases) works. Fixed here with an additive `networkSecurityConfig` — no pinning, no trust bypass.
 
 ## 9. Friction, filed back
 
-[`friction-report.md`](friction-report.md) logs every friction we hit with the CT/SPP previews and the surrounding tooling, with **verbatim** error messages, versions and repro steps — 13 entries covering the admin-gated auditor registry, the silently single-threaded prover, the WebView isolation gap, an RPC filter that rejects a whole call because of one bad id, a `--optimize=false` flag the current CLI no longer accepts, an `InsufficientRefundableFee` on a first TTL-bumping submission, and the Android trust-anchor issue above.
+[`friction-report.md`](friction-report.md) logs every friction we hit with the CT/SPP previews and the surrounding tooling, with **verbatim** error messages, versions and repro steps — 15 entries covering the admin-gated auditor registry, the silently single-threaded prover, the WebView isolation gap, an RPC filter that rejects a whole call because of one bad id, a `--optimize=false` flag the current CLI no longer accepts, an `InsufficientRefundableFee` on a first TTL-bumping submission, a retention floor that moves *while you use it*, and the Android trust-anchor issue above.
 
-Ten of them are written up as ready-to-file issue drafts in [`docs/issues-drafts/`](docs/issues-drafts/), each naming its target repo: 5 for the CT demo, 1 for `OpenZeppelin/stellar-contracts`, 2 for `stellar/stellar-rpc`, 2 for `stellar/stellar-cli`. `TODO(session-8): file them upstream after human review and link the issue URLs here.` A preview's most useful hackathon output is a precise bug report, so this is a deliverable, not an appendix.
+Ten of them are written up as ready-to-file issue drafts in [`docs/issues-drafts/`](docs/issues-drafts/), each naming its target repo: 5 for the CT demo, 1 for `OpenZeppelin/stellar-contracts`, 2 for `stellar/stellar-rpc`, 2 for `stellar/stellar-cli`. They are drafts on purpose: filing a bug under a stranger's repo is a human's call, one by one, and none has been posted yet. A preview's most useful hackathon output is a precise bug report, so this is a deliverable, not an appendix.
 
 ## 10. Demo & deployment
 
-- Demo video (2:30): `TODO(session-9): link the recorded demo — a contribution the explorer cannot show · the total verified from outside the app · the RPC forgetting the timeline and Raiz Memory restoring it by changing one URL.`
-- Public Raiz Memory instance: `TODO(session-8): publish the URL once the instance is deployed; until then run it locally per §6.`
+- **Repo:** <https://github.com/JuanWimmin/raiz-confidential-stack> — this is the submission.
+- **Landing page:** [`web/`](web/) — one self-contained `index.html`, no build step, no dependencies.
+- **Demo video (2:30):** recorded on 5–6 August 2026 from the shooting script in [`docs/demo-run.md`](docs/demo-run.md), which was already rehearsed end to end on the phone with stopwatch timings. The link goes here and into the landing page the moment it is up; if you are reading this and there is no link, it is not up yet.
+- **Public Raiz Memory instance:** an ephemeral **cloudflared quick tunnel** started by [`scripts/serve-public.ps1`](scripts/serve-public.ps1) — we have no VM, and the quick tunnel regenerates its hostname on every start, so no permanent URL is promised here. The reproducible route for a judge is the container in [`docs/deploy-public.md`](docs/deploy-public.md); it needs no tunnel and no trust in us.
 
 ---
 *Raiz Protocol — community savings on Stellar. The value the neighborhood creates stays in the neighborhood, and the neighborhood decides.*

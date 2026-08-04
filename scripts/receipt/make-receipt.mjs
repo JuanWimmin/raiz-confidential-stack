@@ -33,13 +33,14 @@ import { fileURLToPath } from "node:url";
 
 import {
   ChainClient, fetchEvents,
-  deriveKeys, deriveEphemeralRE, scalarMul, H, pointCoords, toHex32,
+  deriveKeys, deriveEphemeralRE, scalarMul, H, pointCoords,
   proverFromArtifact, enableThreadedProving, THREADS,
-  proveSenderDisclosure, generateRecipientKeys, recipientKeysFromSecret,
+  proveSenderDisclosure, recipientKeysFromSecret,
   newDisclosureRequest, pointFromJson, DISCLOSE_SENDER_CIRCUIT_ID,
   buildDiscloseSenderWitness, loadDisclosureArtifact,
-  loadDeployment, loadEnvDeploy, saveEnvDeploy, retry, fmtXlm,
+  loadDeployment, loadEnvDeploy, retry, fmtXlm,
 } from "./_vendor.mjs";
+import { DEMO_VERIFIER_SECRET_HEX, DEMO_VERIFIER_BANNER } from "./demo-verifier-key.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -64,16 +65,20 @@ async function main() {
   });
 
   // ---- [verifier] mint the disclosure request ------------------------------
-  // Long-lived keypair (r_R, P_R): reused across runs via .env.deploy so
-  // verify-receipt.mjs can decrypt; the NONCE is fresh per request.
+  // Long-lived keypair (r_R, P_R): stable across runs so verify-receipt.mjs
+  // can decrypt; the NONCE is fresh per request. A real verifier's own key
+  // (RECEIPT_VERIFIER_SECRET_HEX in .env.deploy) always wins; otherwise we
+  // use the PUBLISHED demo key so a regenerated receipt.json stays verifiable
+  // by anyone who cloned the repo — see demo-verifier-key.mjs for why that is
+  // safe here and why no real verifier should ever do it.
   let verifierKeys;
   if (env.RECEIPT_VERIFIER_SECRET_HEX) {
     verifierKeys = recipientKeysFromSecret(BigInt(env.RECEIPT_VERIFIER_SECRET_HEX));
     console.log(`[verifier] reusing recipient key from .env.deploy (P_R = ${verifierKeys.pR.x.slice(0, 10)}…)`);
   } else {
-    verifierKeys = generateRecipientKeys();
-    saveEnvDeploy({ RECEIPT_VERIFIER_SECRET_HEX: toHex32(verifierKeys.rR) });
-    console.log(`[verifier] generated fresh recipient key; secret persisted to .env.deploy`);
+    verifierKeys = recipientKeysFromSecret(BigInt(DEMO_VERIFIER_SECRET_HEX));
+    console.log(`[verifier] ${DEMO_VERIFIER_BANNER}`);
+    console.log(`[verifier] P_R = ${verifierKeys.pR.x.slice(0, 10)}…`);
   }
   const request = newDisclosureRequest(verifierKeys);
   console.log(`[verifier] request minted: fresh nonce ${request.nu.slice(0, 10)}… — the proof will bind to (P_R, nu)`);

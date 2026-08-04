@@ -3,8 +3,9 @@
 Independently reconstructs **and verifies** the confidential fund total of a
 Sobre del Barrio community goal, using nothing but:
 
-- the public Stellar testnet RPC (or any getEvents-compatible endpoint,
-  e.g. a Raiz Memory instance via `--rpc`), and
+- a public Stellar RPC — it needs `getEvents` **and** state reads
+  (`simulateTransaction`, `getLedgerEntries`), so a Raiz Memory instance is not
+  a substitute for it; see "Retention" below, and
 - the goal's **published** auditor view key `k1` — a Grumpkin secret scalar we
   publish on purpose ("the fund is glass").
 
@@ -92,10 +93,26 @@ of novel crypto for a judge to audit) to save one `pnpm install`. Not worth it.
 --goal-meta C…    goal_meta registry contract (checked against k1; optional)
 --goal-id N       goal id inside goal_meta (default 1 — the real demo goal;
                   id 0 is an early placeholder created before the view key existed)
---rpc URL         any getEvents-compatible endpoint — the Stellar RPC or a
-                  Raiz Memory instance (this is how history older than the
-                  RPC's ~7-day retention window stays verifiable)
+--rpc URL         a Stellar RPC endpoint. Not just getEvents: this script also
+                  reads live chain state through it (see Retention below)
 ```
+
+## Retention: what this script can and cannot outlive
+
+Two different reads happen here. `[2]` replays **events**, which an RPC drops
+after ~7 days. `[1]` and `[3]` read **chain state** — the goal's live Pedersen
+commitments, the CT auditor-registry key, `goal_meta`'s stored point — which
+any RPC still serves, because state is not events.
+
+Raiz Memory makes the first durable. It is not an RPC: it answers `/health`,
+`/coverage` and `/events` and nothing else (`raiz-memory/src/main.rs`), so
+`--rpc` pointed at it would 404 on the state reads. This script deliberately
+uses **one** endpoint for both, which means that past the retention window it
+finds no contributions and says so instead of printing a number. The wallet
+already does the split — events from a configurable source, state from an RPC
+(`eventsUrl` vs `rpcUrl` in `wallet/app/src/main/assets/prover/raiz-shim.js`) —
+and giving this script the same split is a small post-video change, not a
+claim we make today.
 
 ## Real output (2026-08-03, testnet ledger 3952632)
 

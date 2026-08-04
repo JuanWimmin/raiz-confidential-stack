@@ -198,7 +198,12 @@ async function main() {
     }
   }
   if (contributions.length === 0) {
-    throw new Error(`no events touching ${GOAL} found from ledger ${FROM_LEDGER} — outside the RPC retention window? Point --rpc at a Raiz Memory instance or lower --from-ledger.`);
+    // NOTE: a Raiz Memory instance is NOT a drop-in for --rpc here. It serves
+    // /events only; steps [1] and [3] read chain state (simulate,
+    // getLedgerEntries), which it does not answer. Splitting the event source
+    // from the state source is the fix, and it is not done yet — see README
+    // "Retention". Until then, an out-of-window replay is a hard stop.
+    throw new Error(`no events touching ${GOAL} found from ledger ${FROM_LEDGER} — outside this RPC's retention window? Raise --from-ledger, or use an RPC/archive node that still holds that range.`);
   }
   contributions.forEach((l) => console.log(l));
 

@@ -16,8 +16,13 @@
  *   6. Only then is the sealed amount decrypted with the verifier's secret r_R.
  *
  * Usage:  node verify-receipt.mjs [receipt.json]
- * Needs RECEIPT_VERIFIER_SECRET_HEX in .env.deploy (the verifier's own key —
- * in a real deployment this never leaves the verifying party).
+ *
+ * The verifier's own secret r_R is needed for step 6 (and only step 6). It is
+ * read from RECEIPT_VERIFIER_SECRET_HEX in .env.deploy when present — in a
+ * real deployment that value never leaves the verifying party. For the
+ * committed demo receipt it falls back to the published throwaway key in
+ * demo-verifier-key.mjs, so this script runs on a fresh clone; read that
+ * file's header for exactly why publishing it is harmless.
  */
 
 import { readFileSync } from "node:fs";
@@ -30,6 +35,7 @@ import {
   loadDisclosureArtifact, loadPinnedVk,
   loadDeployment, loadEnvDeploy, retry, fmtXlm,
 } from "./_vendor.mjs";
+import { DEMO_VERIFIER_SECRET_HEX, DEMO_VERIFIER_BANNER } from "./demo-verifier-key.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RECEIPT = process.argv[2] ?? path.join(HERE, "receipt.json");
@@ -38,8 +44,12 @@ async function main() {
   const receipt = JSON.parse(readFileSync(RECEIPT, "utf8"));
   const dep = loadDeployment();
   const env = loadEnvDeploy();
+  // Only the requesting verifier can open a receipt. Their own key wins when
+  // configured; otherwise the published demo key (see demo-verifier-key.mjs)
+  // keeps the committed receipt runnable for anyone who cloned the repo.
+  const verifierSecretHex = env.RECEIPT_VERIFIER_SECRET_HEX ?? DEMO_VERIFIER_SECRET_HEX;
   if (!env.RECEIPT_VERIFIER_SECRET_HEX) {
-    throw new Error("RECEIPT_VERIFIER_SECRET_HEX missing from .env.deploy — only the requesting verifier can check (and decrypt) a receipt");
+    console.log(`verifier: ${DEMO_VERIFIER_BANNER}\n`);
   }
   if (receipt.token !== dep.contracts.token) {
     throw new Error(`receipt is for token ${receipt.token}, configured deployment is ${dep.contracts.token}`);
@@ -49,7 +59,7 @@ async function main() {
   console.log(`claim   : ${receipt.claim.contributor.slice(0, 6)}… paid ${receipt.claim.amountXlm} XLM to ${receipt.claim.goal.slice(0, 6)}…`);
   console.log(`circuit : ${receipt.bundle.circuitId}\n`);
 
-  const keys = recipientKeysFromSecret(BigInt(env.RECEIPT_VERIFIER_SECRET_HEX));
+  const keys = recipientKeysFromSecret(BigInt(verifierSecretHex));
   const client = new ChainClient({
     rpcUrl: dep.rpcUrl,
     networkPassphrase: dep.passphrase,
