@@ -45,6 +45,14 @@
  *     prepareMerge, prepareTransfer, status — parameter shapes documented at
  *     each function below.
  *
+ *   window.RaizProver.goalTotal(paramsJson) -> Promise<result>   (Session 6)
+ *     ALSO installed as window.RaizChain.goalTotal (same function). The goal's
+ *     confidential fund total, opened with the PUBLISHED auditor view key and
+ *     VERIFIED against the on-chain Pedersen commitments — the in-app port of
+ *     scripts/verify-goal-total/verify-goal-total.mjs, same vendor primitives,
+ *     same three steps. Read-only: no secrets of ours, nothing to sign.
+ *     Parameters and result shape documented at the function below.
+ *
  * SECRETS POLICY (project decision, non-negotiable): inputs — including sk —
  * arrive per call and leave scope when the call resolves. Nothing here writes
  * to localStorage/IndexedDB/cookies. The only caches are public, non-secret
@@ -74,6 +82,7 @@ import {
   Address,
   BASE_FEE,
   nativeToScVal,
+  scValToNative,
   xdr,
   rpc,
 } from "@stellar/stellar-sdk";
@@ -81,13 +90,20 @@ import {
 // Vendor CT SDK (read-only, bundled as-is; paths relative to this file).
 import { deriveKeys } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/crypto/keys.js";
 import { addressToField } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/crypto/address.js";
-import { randomScalar, toHex32, toBytes32BE } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/crypto/field.js";
-import { pointFromBytes, pointCoords } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/crypto/grumpkin.js";
+import { randomScalar, toHex32, toBytes32BE, fromBytesBE } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/crypto/field.js";
+import { pointFromBytes, pointCoords, commit } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/crypto/grumpkin.js";
 import { buildRegisterWitness } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/witness/register.js";
 import { buildTransferWitness } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/witness/transfer.js";
 import { buildWithdrawWitness } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/witness/withdraw.js";
 import { ChainClient } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/chain/client.js";
 import { encodeRegisterData, encodeTransferData } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/chain/payload.js";
+import { fetchEvents, buildConfidentialEvent, naturalEventId, KNOWN } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/chain/events.js";
+import {
+  auditTransferRecipientChannel,
+  auditTransferSenderChannel,
+  auditWithdraw,
+  auditorPublicKey,
+} from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/auditor/decrypt.js";
 import { StateEngine } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/state/engine.js";
 import { MemoryStore } from "../../../../../../vendor/stellar-confidential-token-demo/packages/sdk/dist/state/store.js";
 
@@ -530,10 +546,400 @@ async function status(json) {
 }
 
 // ---------------------------------------------------------------------------
+// goalTotal — the goal's total, opened with the PUBLISHED view key and VERIFIED
+//
+// In-app port of scripts/verify-goal-total/verify-goal-total.mjs (Session 7),
+// step for step, on the same vendor primitives. NOT a second implementation of
+// the crypto: auditTransferRecipientChannel / commit / pointFromBytes are the
+// vendor SDK's, imported read-only, exactly as the Node script imports them.
+//
+// Why this exists (docs/raiz-reuse-plan.md GAP 0 / risk 1): status() decrypts
+// with the ACCOUNT'S OWN scalar and cannot open an auditor channel. The goal's
+// published k1 is an AUDITOR key (auditor id 1 of our deployment). Without this
+// function the Meta screen has no code path to its headline number.
+//
+// The point of the design is that this number is not ours to assert: the same
+// three checks any outsider runs (published secret ↔ published points, event
+// replay, re-commit against the chain) run here, and `verified` is false — with
+// the failing check named — whenever they disagree. The UI must show the number
+// ONLY when verified === true.
+// ---------------------------------------------------------------------------
+
+const samePoint = (a, b) => {
+  const ca = pointCoords(a);
+  const cb = pointCoords(b);
+  return ca.x === cb.x && ca.y === cb.y;
+};
+
+/**
+ * XDR-backed EventDataAccessor over a Map-format event's data ScMap.
+ * Mirrors the PRIVATE `dataMap` of vendor chain/events.js:240-256 field for
+ * field. Only needed for the eventsUrl path: `buildConfidentialEvent` is the
+ * vendor's documented extension point ("Both parseEvent (RPC/XDR) and
+ * parseIndexerEvent (Goldsky/JSON) call this with their own addr/data
+ * adapters"), but the XDR adapter itself is not exported. The field MAPPING
+ * still comes from the vendor, so it cannot drift.
+ */
+function xdrDataMap(value) {
+  const byName = new Map();
+  for (const e of value.map() ?? []) byName.set(e.key().sym().toString(), e.val());
+  const get = (name) => {
+    const v = byName.get(name);
+    if (!v) throw new Error(`event data missing field "${name}"`);
+    return v;
+  };
+  return {
+    field: (name) => fromBytesBE(new Uint8Array(get(name).bytes())),
+    point: (name) => pointFromBytes(new Uint8Array(get(name).bytes())),
+    i128: (name) => scValToNative(get(name)),
+    u32: (name) => get(name).u32(),
+  };
+}
+
+/**
+ * Decode one getEvents-shaped JSON row (topics/value as base64 XDR) into the
+ * vendor's ConfidentialEvent. Tolerates both observed encodings of the RPC
+ * JSON (gotcha #5 in CLAUDE.md): topic/topics entries and value as a plain
+ * base64 string or as {"xdr": "…"}. Raiz Memory serves the string form
+ * (raiz-memory/src/db.rs — "ciphertext stays ciphertext").
+ */
+function parseRawEvent(row) {
+  const b64 = (v) => (typeof v === "string" ? v : v?.xdr);
+  const scv = (v) => xdr.ScVal.fromXDR(b64(v), "base64");
+  const rawTopics = row.topic ?? row.topics ?? [];
+  if (rawTopics.length === 0) return null;
+  const topics = rawTopics.map(scv);
+  const name = topics[0].sym().toString();
+  if (!KNOWN.has(name)) return null; // config setters etc. — same skip as the RPC path
+
+  const ledger = Number(row.ledger);
+  const txHash = row.txHash ?? row.transactionHash ?? "";
+  // Coordinates carried inside an RPC event id `<toid>-<eventOrder>`
+  // (vendor chain/events.js:116-121, rpcEventCoords — private there).
+  const [toidStr, eventStr] = String(row.id ?? row.pagingToken ?? "0-0").split("-");
+  const opIndex = Number(BigInt(toidStr) & 0xfffn);
+  const eventIndex = Number(eventStr ?? "0");
+  const base = {
+    ledger,
+    txHash,
+    cursor: naturalEventId({ ledger, txHash, opIndex, eventIndex }),
+    ledgerClosedAt: row.ledgerClosedAt ?? null,
+  };
+  const addr = (i) => Address.fromScVal(topics[i]).toString();
+  return buildConfidentialEvent(name, base, addr, xdrDataMap(scv(row.value)));
+}
+
+/**
+ * Read the full event history of `contractId` from a Raiz Memory instance
+ * (or anything serving the same getEvents-shaped JSON), following cursor
+ * pagination to the end. `source` is passed through verbatim — that is how the
+ * purge demo asks the indexer to answer as "an RPC that forgets"
+ * (raiz-memory/src/main.rs: `source=rpc-simulation`).
+ */
+async function fetchEventsFromUrl(baseUrl, { contractId, startLedger, source, pageLimit = 200 }) {
+  const base = baseUrl.replace(/\/?$/, "/");
+  const out = [];
+  let cursor;
+  let latestLedger = 0;
+  let oldestLedger = null;
+  let pages = 0;
+  let rows = 0;
+  for (;;) {
+    const u = new URL("events", base);
+    u.searchParams.set("contractId", contractId);
+    if (cursor) u.searchParams.set("cursor", cursor);
+    else if (startLedger != null) u.searchParams.set("startLedger", String(startLedger));
+    u.searchParams.set("limit", String(pageLimit));
+    if (source) u.searchParams.set("source", source);
+
+    const resp = await fetch(u.href);
+    // Read the body even on a failure status: the useful sentence ("indexer
+    // unreachable", "contract not indexed") lives THERE, not in the status.
+    const body = await resp.text();
+    let page;
+    try {
+      page = JSON.parse(body);
+    } catch {
+      throw new Error(`events source ${u.href} -> HTTP ${resp.status}, non-JSON body: ${body.slice(0, 200)}`);
+    }
+    if (!resp.ok || page.error) {
+      throw new Error(`events source ${u.href} -> HTTP ${resp.status}: ${page.error ?? body.slice(0, 200)}`);
+    }
+    latestLedger = Number(page.latestLedger ?? latestLedger);
+    if (page.oldestLedger != null) oldestLedger = Number(page.oldestLedger);
+    const batch = page.events ?? [];
+    for (const r of batch) {
+      const ev = parseRawEvent(r);
+      if (ev) out.push(ev);
+    }
+    rows += batch.length;
+    pages += 1;
+    if (batch.length < pageLimit || !page.cursor || page.cursor === cursor) break;
+    cursor = page.cursor;
+    if (pages > 500) throw new Error(`events source ${base} did not terminate after 500 pages`);
+  }
+  return { events: out, latestLedger, oldestLedger, pages, rows };
+}
+
+/**
+ * goalTotal({
+ *   rpcUrl, passphrase?,                  // chain reads (commitments, keys)
+ *   tokenContractId,                      // the CT wrapper (C…)
+ *   goalAccount,                          // the goal's G… address
+ *   viewKeySecretHex,                     // the PUBLISHED auditor secret k1
+ *   fromLedger,                           // wrapper deployment ledger (required)
+ *   auditorContractId?,                   // enables the CT registry cross-check
+ *   verifierContractId?,                  // accepted for symmetry; unused (reads only)
+ *   goalMetaContractId?, goalMetaGoalId?, // enables the goal_meta cross-check
+ *   eventsUrl?, eventsSource?,            // read events from Raiz Memory instead of the RPC
+ * })
+ *
+ * ->  {
+ *       totalStroops, spendableStroops, receivingStroops,   // decimal strings
+ *       contributions: [{ kind, from, stroops, txHash, ledger, ledgerClosedAt, decrypted }],
+ *       timeline: [{ kind, ledger, txHash, ledgerClosedAt, from?, to?, account?, stroops? }],
+ *       verified, verifiedAtLedger, fullyPointVerified,
+ *       checks: [{ name, ok, detail }],   // ok === null = check skipped, not run
+ *       goalName?, targetStroops?, auditorId,
+ *       eventSource, eventsUrl?, eventsLatestLedger, oldestLedger, eventsScanned,
+ *       ms
+ *     }
+ *
+ * `verified` is true only when every check that RAN passed. It is false — never
+ * silently true — when a decrypted opening fails to re-commit to the point the
+ * chain holds.
+ */
+async function goalTotal(json) {
+  const t0 = performance.now();
+  const p = parseParams(json);
+  const token = asStrkey(reqStr(p, "tokenContractId"), "tokenContractId");
+  const goal = reqStr(p, "goalAccount");
+  const k1 = asBig(reqStr(p, "viewKeySecretHex"), "viewKeySecretHex");
+  const fromLedger = Number(p.fromLedger);
+  if (!Number.isInteger(fromLedger) || fromLedger <= 0) {
+    throw new Error(
+      "param 'fromLedger' (the CT wrapper's deployment ledger) is required — " +
+        "the replay must start at the wrapper's first ledger or the openings are incomplete",
+    );
+  }
+
+  const client = new ChainClient({
+    rpcUrl: reqStr(p, "rpcUrl"),
+    networkPassphrase: typeof p.passphrase === "string" ? p.passphrase : DEFAULT_PASSPHRASE,
+    contracts: {
+      token,
+      verifier: typeof p.verifierContractId === "string" ? p.verifierContractId : "",
+      auditor: typeof p.auditorContractId === "string" ? p.auditorContractId : "",
+    },
+  });
+  const k1Point = auditorPublicKey(k1); // K = k1 · H
+  const checks = [];
+  const check = (name, ok, detail) => checks.push({ name, ok, detail });
+  const skip = (name, why) => checks.push({ name, ok: null, detail: `skipped: ${why}` });
+
+  // ---- [1] the published secret must match the on-chain published points ----
+  let goalName = null;
+  let targetStroops = null;
+  if (typeof p.goalMetaContractId === "string" && p.goalMetaContractId.length > 0) {
+    const goalId = Number(p.goalMetaGoalId);
+    if (!Number.isInteger(goalId) || goalId < 0) {
+      throw new Error("param 'goalMetaGoalId' (u32) is required when goalMetaContractId is given");
+    }
+    const scv = await client.simulate(p.goalMetaContractId, "get_goal", [
+      nativeToScVal(goalId, { type: "u32" }),
+    ]);
+    const g = scValToNative(scv);
+    goalName = String(g.name);
+    targetStroops = dec(BigInt(g.target));
+    const backsGoal = g.goal_account === goal;
+    check(
+      "goal_meta backs this goal account",
+      backsGoal,
+      backsGoal
+        ? `goal ${goalId} "${goalName}" (target ${targetStroops} stroops)`
+        : `goal ${goalId} backs ${g.goal_account}, not ${goal}`,
+    );
+    check(
+      "goal_meta.view_key == k1·H",
+      samePoint(pointFromBytes(Uint8Array.from(g.view_key)), k1Point),
+      "the published secret opens exactly the point the goal registry published",
+    );
+  } else {
+    skip("goal_meta.view_key == k1·H", "no goalMetaContractId given");
+  }
+
+  // Commitments are read BEFORE the events on purpose: a transaction landing
+  // mid-read then leaves the openings AHEAD of the commitments, which a single
+  // cheap re-read below resolves. The opposite order cannot self-heal.
+  const account = await client.confidentialBalance(goal);
+  if (!account) throw new Error(`goal account ${goal} is not registered on the CT wrapper ${token}`);
+
+  if (client.cfg.contracts.auditor) {
+    const registryKey = await client.auditorKey(account.auditorId);
+    check(
+      `CT auditor registry key (id ${account.auditorId}) == k1·H`,
+      samePoint(registryKey, k1Point),
+      "the wrapper's own auditor registry serves the same point",
+    );
+  } else {
+    skip("CT auditor registry key == k1·H", "no auditorContractId given");
+  }
+
+  // ---- [2] replay the public event stream, decrypting with k1 --------------
+  const useUrl = typeof p.eventsUrl === "string" && p.eventsUrl.length > 0;
+  let events;
+  let eventsLatestLedger = 0;
+  let oldestLedger = null;
+  if (useUrl) {
+    const r = await fetchEventsFromUrl(p.eventsUrl, {
+      contractId: token,
+      startLedger: fromLedger,
+      source: typeof p.eventsSource === "string" ? p.eventsSource : undefined,
+    });
+    events = r.events;
+    eventsLatestLedger = r.latestLedger;
+    oldestLedger = r.oldestLedger;
+  } else {
+    const r = await fetchEvents(client, { startLedger: fromLedger, contractId: token });
+    events = r.events;
+    eventsLatestLedger = r.latestLedger;
+  }
+
+  // Accumulators: (value, randomness) openings of the goal's two on-chain
+  // Pedersen commitments. Deposits enter with r = 0 (public SAC boundary);
+  // incoming transfers enter with the (v_tx, r_tx) the k1 recipient channel
+  // decrypts. Verbatim semantics of verify-goal-total.mjs:172-199.
+  let spendV = 0n, spendR = 0n;
+  let recvV = 0n, recvR = 0n;
+  let spendableProvable = true; // an outflow re-randomizes with owner-only randomness
+  const contributions = [];
+  const timeline = [];
+  const at = (ev) => ({
+    ledger: ev.ledger,
+    txHash: ev.txHash,
+    ledgerClosedAt: ev.ledgerClosedAt ?? null,
+  });
+
+  for (const ev of events) {
+    if (ev.type === "deposit" && ev.to === goal) {
+      recvV += ev.amount;
+      const c = { kind: "deposit", from: ev.from, stroops: dec(ev.amount), decrypted: false, ...at(ev) };
+      contributions.push(c);
+      timeline.push(c);
+    } else if (ev.type === "transfer" && ev.to === goal) {
+      const { amount, rTx } = auditTransferRecipientChannel(k1, ev);
+      recvV += amount;
+      recvR += rTx;
+      const c = { kind: "aporte", from: ev.from, stroops: dec(amount), decrypted: true, ...at(ev) };
+      contributions.push(c);
+      timeline.push(c);
+    } else if (ev.type === "merge" && ev.account === goal) {
+      spendV += recvV;
+      spendR += recvR;
+      recvV = 0n;
+      recvR = 0n;
+      timeline.push({ kind: "cosecha", account: ev.account, ...at(ev) });
+    } else if (ev.type === "transfer" && ev.from === goal) {
+      // k1 IS the goal's sender-side auditor key, so amount and post-balance
+      // still decrypt — but the new spendable commitment carries fresh
+      // owner-only randomness, so point verification stops for spendable.
+      const snd = auditTransferSenderChannel(k1, ev);
+      spendV = snd.senderBalance;
+      spendableProvable = false;
+      timeline.push({ kind: "salida", to: ev.to, stroops: dec(snd.amount), ...at(ev) });
+    } else if (ev.type === "withdraw" && ev.from === goal) {
+      const chk = auditWithdraw(k1, ev);
+      spendV = chk.senderBalance; // the withdrawn amount is public in the event
+      spendableProvable = false;
+      timeline.push({ kind: "retiro", to: ev.to, stroops: dec(ev.amount), ...at(ev) });
+    }
+  }
+
+  if (timeline.length === 0) {
+    throw new Error(
+      `no events touching ${goal} found from ledger ${fromLedger}` +
+        (useUrl
+          ? ` in ${p.eventsUrl} — is the wrapper indexed there?`
+          : " — outside the RPC's ~7-day retention window? Point eventsUrl at a Raiz Memory instance."),
+    );
+  }
+
+  // ---- [3] THE VERIFICATION: re-commit and compare against the chain -------
+  let acc = account;
+  let spendOk = spendableProvable && samePoint(commit(spendV, spendR), acc.spendableBalance);
+  let recvOk = samePoint(commit(recvV, recvR), acc.receivingBalance);
+  let reread = false;
+  if ((spendableProvable && !spendOk) || !recvOk) {
+    const again = await client.confidentialBalance(goal);
+    if (again) {
+      reread = true;
+      acc = again;
+      spendOk = spendableProvable && samePoint(commit(spendV, spendR), acc.spendableBalance);
+      recvOk = samePoint(commit(recvV, recvR), acc.receivingBalance);
+    }
+  }
+  const rereadNote = reread ? " (after one commitment re-read: a tx landed mid-verification)" : "";
+  const staleNote =
+    useUrl && eventsLatestLedger > 0
+      ? ` — the events source is at ledger ${eventsLatestLedger}; if it lags the chain the openings are incomplete`
+      : "";
+
+  if (spendableProvable) {
+    check(
+      "commit(Σ spendable openings) == on-chain spendable commitment",
+      spendOk,
+      spendOk ? `${dec(spendV)} stroops${rereadNote}` : `MISMATCH at ${dec(spendV)} stroops${staleNote}`,
+    );
+  } else {
+    checks.push({
+      name: "commit(Σ spendable openings) == on-chain spendable commitment",
+      ok: null,
+      detail:
+        "not point-verifiable after an outflow (the new commitment uses owner-only " +
+        `randomness); value still tracked via the k1 sender channel = ${dec(spendV)} stroops`,
+    });
+  }
+  check(
+    "commit(Σ receiving openings) == on-chain receiving commitment",
+    recvOk,
+    recvOk ? `${dec(recvV)} stroops${rereadNote}` : `MISMATCH at ${dec(recvV)} stroops${staleNote}`,
+  );
+
+  const verified = checks.every((c) => c.ok !== false);
+  const verifiedAtLedger = await client.latestLedger();
+
+  return {
+    goalAccount: goal,
+    tokenContractId: token,
+    auditorId: acc.auditorId,
+    goalName,
+    targetStroops,
+    totalStroops: dec(spendV + recvV),
+    spendableStroops: dec(spendV),
+    receivingStroops: dec(recvV),
+    contributions,
+    timeline,
+    verified,
+    fullyPointVerified: spendableProvable,
+    verifiedAtLedger,
+    checks,
+    eventSource: useUrl ? "events-url" : "rpc",
+    ...(useUrl ? { eventsUrl: p.eventsUrl } : {}),
+    eventsLatestLedger,
+    oldestLedger,
+    eventsScanned: events.length,
+    ms: Math.round(performance.now() - t0),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Install + tell Kotlin we are alive
 // ---------------------------------------------------------------------------
-globalThis.RaizProver = { generate, selftest };
-globalThis.RaizChain = { prepareRegister, prepareDeposit, prepareMerge, prepareTransfer, status };
+// goalTotal is installed on BOTH surfaces on purpose: it belongs with the
+// chain readers, but ProverWebViewBridge.goalTotal calls it through
+// window.RaizProver (and the generic chainCall path finds it on RaizChain).
+globalThis.RaizProver = { generate, selftest, goalTotal };
+globalThis.RaizChain = { prepareRegister, prepareDeposit, prepareMerge, prepareTransfer, status, goalTotal };
 
 console.log(
   `[RaizProver] ready — threads=${THREADS} crossOriginIsolated=${globalThis.crossOriginIsolated === true} ` +

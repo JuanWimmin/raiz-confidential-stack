@@ -1,4 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- UI strings are Spanish, informal "tu". Code, comments and docs are English.
+     The screens build their copy in Kotlin (it is interpolated with live ledger
+     numbers, addresses and phase text), so this file only holds the strings the
+     Android framework itself reads. -->
 <resources>
-    <string name="app_name">Sobre CT Spike</string>
+    <string name="app_name">Sobre del Barrio</string>
+
+    <!-- Content descriptions used by the app shell. -->
+    <string name="cd_volver">Volver</string>
+    <string name="cd_actualizar">Actualizar</string>
+    <string name="cd_mas">Más opciones</string>
+
+    <!-- The project's UX vocabulary, in one place so it is never paraphrased:
+         register / deposit / transfer / merge / withdraw / view key / disclosure. -->
+    <string name="op_register">Abrir mi sobre</string>
+    <string name="op_deposit">Sellar</string>
+    <string name="op_transfer">Aportar</string>
+    <string name="op_merge">Cosechar</string>
+    <string name="op_withdraw">Abrir el sobre</string>
+    <string name="op_view_key">Verifícalo tú mismo</string>
+    <string name="op_disclosure">Mi recibo</string>
 </resources>

@@ -2,6 +2,7 @@ package xyz.raiz.sobre.prover
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -20,7 +21,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -103,6 +107,14 @@ class ProverWebViewBridge(context: Context) {
     var consoleListener: ((String) -> Unit)? = null
 
     /**
+     * Upstream base URL of the durable event source (Raiz Memory) that
+     * [EVENTS_PROXY_URL] forwards to, or null to serve 503 there.
+     * Set by [goalTotal]; see the proxy rationale on [proxyEvents].
+     */
+    @Volatile
+    private var eventsUpstream: String? = null
+
+    /**
      * Loads the prover page and starts JS/WASM init. Call once, main thread.
      * [proverUrl] exists only for the documented interim fallback
      * (http://localhost:4173 via `adb reverse`, scripts/prover-bench server);
@@ -127,9 +139,11 @@ class ProverWebViewBridge(context: Context) {
                 view: WebView,
                 request: WebResourceRequest,
             ): WebResourceResponse? =
-                // appassets requests -> APK assets; anything else (the CRS
+                // /raiz-memory/* -> proxied to the configured indexer (below);
+                // other appassets requests -> APK assets; anything else (the CRS
                 // download from https://crs.aztec.network) -> null = network.
-                assetLoader.shouldInterceptRequest(request.url)
+                proxyEvents(request.url)
+                    ?: assetLoader.shouldInterceptRequest(request.url)
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 Log.i(TAG, "prover page finished: $url")
@@ -241,6 +255,112 @@ class ProverWebViewBridge(context: Context) {
             "window.RaizChain[${JSONObject.quote(fn)}](${JSONObject.quote(inputsJson)})" +
             callbackTail(id)
     }
+
+    /**
+     * The goal's confidential total, opened with the PUBLISHED auditor view key
+     * and verified against the on-chain Pedersen commitments — the in-app
+     * equivalent of `node scripts/verify-goal-total/verify-goal-total.mjs`.
+     * Read-only: nothing to sign, no secret of ours involved (the view key is
+     * public by design; that IS the design).
+     *
+     * [inputsJson]: the parameter object documented at `goalTotal` in
+     * assets/prover/raiz-shim.js — rpcUrl, tokenContractId, goalAccount,
+     * viewKeySecretHex, fromLedger (+ optional auditorContractId,
+     * goalMetaContractId/goalMetaGoalId for the two published-key cross-checks).
+     *
+     * [eventsSourceUrl]: base URL of a Raiz Memory instance to replay events
+     * from instead of the RPC (e.g. "http://localhost:8091" reached through
+     * `adb reverse tcp:8091 tcp:8091`). null = read from the RPC, which forgets
+     * after ~7 days. The URL handed to JS is [EVENTS_PROXY_URL], not this one —
+     * see [proxyEvents].
+     *
+     * Returns the shim's result: totalStroops, contributions[], verified,
+     * verifiedAtLedger, checks[] (see the shim header). **Show the number only
+     * when `verified` is true** — a false there means a decrypted opening did
+     * not re-commit to the point the chain holds.
+     */
+    suspend fun goalTotal(
+        inputsJson: String,
+        eventsSourceUrl: String? = null,
+        timeoutMs: Long = GOAL_TOTAL_TIMEOUT_MS,
+    ): JSONObject {
+        val params = JSONObject(inputsJson)
+        if (eventsSourceUrl != null) params.put("eventsUrl", EVENTS_PROXY_URL)
+        return runProverCall("goalTotal", timeoutMs) { id ->
+            // Inside runProverCall's mutex: concurrent callers cannot clobber
+            // each other's upstream between assignment and dispatch.
+            eventsUpstream = eventsSourceUrl
+            "if(!window.RaizProver.goalTotal){AndroidBridge.onProofError('$id'," +
+                "'window.RaizProver.goalTotal is not defined (stale prover bundle? run " +
+                "node wallet/tools/build-prover-assets.mjs, then rebuild the APK)');return;}" +
+                "window.RaizProver.goalTotal(${JSONObject.quote(params.toString())})" +
+                callbackTail(id)
+        }
+    }
+
+    /**
+     * Same-origin proxy for the durable event source, so the page can read it
+     * AT ALL. The prover page is served from https://appassets.androidplatform.net
+     * (a secure context — bb.js needs one), and a Raiz Memory instance is plain
+     * http on the LAN or on localhost via `adb reverse`. A direct fetch from the
+     * page fails twice over: mixed content (https page -> http subresource is
+     * blocked; WebView defaults to MIXED_CONTENT_NEVER_ALLOW) and CORS (the
+     * indexer sends no Access-Control-Allow-Origin — verified 2026-08-03).
+     *
+     * So the shim is handed [EVENTS_PROXY_URL], a path on its OWN origin, and
+     * this forwards it verbatim (path tail + query string) to [eventsUpstream].
+     * The shim stays generic — in a browser/PWA it takes the real URL directly.
+     *
+     * Runs on the WebView's IO thread (shouldInterceptRequest is never called on
+     * the main thread), so blocking HTTP here is correct.
+     */
+    private fun proxyEvents(url: Uri): WebResourceResponse? {
+        if (!url.host.equals(APPASSETS_HOST, ignoreCase = true)) return null
+        val path = url.path ?: return null
+        if (!path.startsWith(EVENTS_PROXY_PATH)) return null
+
+        val upstream = eventsUpstream
+            ?: return jsonError(503, "no events source configured for this call")
+        val target = upstream.trimEnd('/') + "/" + path.removePrefix(EVENTS_PROXY_PATH) +
+            (url.encodedQuery?.let { "?$it" } ?: "")
+        return try {
+            val conn = (URL(target).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = EVENTS_CONNECT_TIMEOUT_MS
+                readTimeout = EVENTS_READ_TIMEOUT_MS
+                setRequestProperty("Accept", "application/json")
+            }
+            val code = conn.responseCode
+            val body = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                ?.use { it.readBytes() } ?: ByteArray(0)
+            Log.i(TAG, "events proxy -> $target : HTTP $code (${body.size} B)")
+            WebResourceResponse(
+                "application/json",
+                "utf-8",
+                code,
+                if (code in 200..299) "OK" else "UPSTREAM $code",
+                mapOf("Access-Control-Allow-Origin" to "*", "Cache-Control" to "no-store"),
+                ByteArrayInputStream(body),
+            )
+        } catch (e: Exception) {
+            // Friction material: an unreachable indexer must say so, loudly.
+            Log.e(TAG, "events proxy -> $target FAILED: ${e.javaClass.simpleName}: ${e.message}")
+            jsonError(502, "events source $target unreachable: ${e.javaClass.simpleName}: ${e.message}")
+        }
+    }
+
+    /** A JSON body the shim surfaces verbatim through its `page.error` path. */
+    private fun jsonError(status: Int, message: String): WebResourceResponse =
+        WebResourceResponse(
+            "application/json",
+            "utf-8",
+            status,
+            "PROXY $status",
+            mapOf("Access-Control-Allow-Origin" to "*"),
+            ByteArrayInputStream(
+                JSONObject().put("error", message).toString().toByteArray(Charsets.UTF_8),
+            ),
+        )
 
     private fun callbackTail(id: Long): String =
         ".then(function(p){AndroidBridge.onProofReady('$id', JSON.stringify(p));})" +
@@ -376,12 +496,26 @@ class ProverWebViewBridge(context: Context) {
          *  (platform limitation) — bb.js runs single-threaded, by design. */
         const val ENTRY_URL = "https://appassets.androidplatform.net/prover/index.html"
 
+        const val APPASSETS_HOST = "appassets.androidplatform.net"
+
+        /** Path on the page's OWN origin that [proxyEvents] forwards. */
+        const val EVENTS_PROXY_PATH = "/raiz-memory/"
+        const val EVENTS_PROXY_URL = "https://$APPASSETS_HOST$EVENTS_PROXY_PATH"
+
         /** Spike GO threshold: 90 s per proof (docs/SPIKE_DIA0.md). */
         const val PROOF_TIMEOUT_MS = 90_000L
 
         /** RaizChain builders: proving (≤90 s budget) + state sync + RPC
          *  round-trips (simulate + getAccount, testnet latency). */
         const val CHAIN_TIMEOUT_MS = 180_000L
+
+        /** goalTotal proves nothing but replays the wrapper's whole event
+         *  history + 4 simulate round-trips; generous, because testnet is flaky
+         *  in bursts (CLAUDE.md gotcha #3) and the history only grows. */
+        const val GOAL_TOTAL_TIMEOUT_MS = 240_000L
+
+        private const val EVENTS_CONNECT_TIMEOUT_MS = 10_000
+        private const val EVENTS_READ_TIMEOUT_MS = 30_000
 
         /** Page + bundle + wasm init are seconds, not minutes. */
         const val READY_TIMEOUT_MS = 30_000L

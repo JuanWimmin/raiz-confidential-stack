@@ -20,8 +20,13 @@
         <!-- configChanges: keep the WebView alive across rotation — an
              accidental rotate must not reload the page mid-proof (proofs can
              take up to the 90 s GO threshold). -->
+        <!-- FULLY QUALIFIED ON PURPOSE (Session 6): the module namespace moved
+             from "xyz.raiz.sobre.spike" to "xyz.raiz.sobre", so a relative
+             ".MainActivity" would now resolve to the wrong class. If the
+             screens agent moves the launcher to xyz.raiz.sobre.MainActivity,
+             this line must change with it. -->
         <activity
-            android:name=".MainActivity"
+            android:name="xyz.raiz.sobre.spike.MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
             <intent-filter>
