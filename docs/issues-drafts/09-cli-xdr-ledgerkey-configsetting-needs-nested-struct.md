@@ -1,8 +1,20 @@
 # `xdr encode --type LedgerKey`: ConfigSetting arm needs a nested struct, and the "error reading file" message is wrong for inline input
 
-- Status: DRAFT — do not open online before human review (day 3)
+- Status: **DO NOT FILE — DROP, half of it is already fixed** (fact-check
+  2026-08-04). Re-run on the current stellar CLI **27.1.0** / stellar-xdr
+  27.0.0, the error is now:
+  `❌ error: error decoding JSON: invalid type: string "state_archival",
+  expected struct LedgerKeyConfigSetting at line 1 column 34`
+  — the bogus `error reading file:` prefix, which was point 2 and the sharper
+  half of this draft, is **gone**. We only saw it because the machine ran
+  stellar CLI 23.2.1, four majors behind. What survives is point 1: the type
+  error does not name the expected field `config_setting_id`. That is stock
+  serde error text, the working form
+  `{"config_setting":{"config_setting_id":"state_archival"}}` is confirmed to
+  encode fine, and no duplicate exists — but "serde could list field names" is
+  too thin to file against stellar-cli.
 - Repo it belongs to: stellar/stellar-cli (stellar-xdr JSON handling)
-- Version/commit: stellar 23.2.1 / stellar-xdr 23.0.0
+- Version/commit: originally observed on stellar 23.2.1 / stellar-xdr 23.0.0; re-checked on 27.1.0 / stellar-xdr 27.0.0
 
 ## Repro steps
 

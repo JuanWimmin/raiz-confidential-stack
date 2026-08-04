@@ -1,8 +1,18 @@
 # `keys generate --no-fund` removed in 23.x: default silently flipped, and the error's tip is misleading
 
-- Status: DRAFT — do not open online before human review (day 3)
+- Status: **DO NOT FILE — DROP** (fact-check 2026-08-04). The behaviour still
+  reproduces verbatim on the current stellar CLI **27.1.0** (re-run there:
+  same "unexpected argument '--no-fund'" and same tip; `--fund` is the only
+  funding flag). But the draft's framing is wrong on the substance: the
+  default did not "silently flip". stellar/stellar-cli#1407 ("[22.0]
+  `stellar keys generate` should no longer fund", labelled `bug` /
+  `breaking change`, CLOSED) removed `--no-fund` deliberately and announced
+  it. What is left is only "clap prints a generic tip for an unknown flag",
+  which is stock clap behaviour for any typo, not a stellar-cli defect — and
+  we would be raising it three major versions after the removal. Not worth a
+  maintainer's time.
 - Repo it belongs to: stellar/stellar-cli
-- Version/commit: stellar 23.2.1 (496ac35be7a7d8d923fcde9bbbc650ee593d1f6f)
+- Version/commit: originally observed on stellar 23.2.1; re-confirmed on 27.1.0 (8e402ea28202950b272fbabc34caad4d2f64fe87)
 
 ## Repro steps
 

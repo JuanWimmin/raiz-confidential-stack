@@ -1,6 +1,15 @@
 # README prerequisites ("Node >= 20, pnpm 10") no longer bootstrap on Node 25 — corepack was removed from the Node distribution
 
-- Status: DRAFT — do not open online before human review (day 3)
+- Status: **DO NOT FILE as an issue — DROP** (fact-check 2026-08-04). Every
+  fact still checks out: README.md:129 does say "Node ≥ 20, pnpm 10",
+  `package.json` does pin `packageManager: pnpm@10.33.0`, and corepack is
+  genuinely absent from the Node 25.8.1 distribution (not merely off PATH).
+  It is still too thin to file. The README never instructs anyone to use
+  corepack — installing pnpm is the reader's job — and this draft's own text
+  concedes the second half (the msgpackr-extract warning) is "benign here".
+  If we want to be helpful, the right vehicle is a one-line README pull
+  request suggesting `npx -y pnpm@10.33.0 <cmd>` as the portable invocation,
+  not an issue.
 - Repo it belongs to: brozorec/stellar-confidential-token-demo
 - Version/commit: ac67499 (README.md:129); host Node v25.8.1, npm 11.11.0
 

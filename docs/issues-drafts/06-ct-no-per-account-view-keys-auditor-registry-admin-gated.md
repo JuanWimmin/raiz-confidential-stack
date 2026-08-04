@@ -1,58 +1,81 @@
-# Confidential preview: no per-account view keys — the auditor registry is admin-gated, so users of a shared deployment cannot obtain any scoped visibility key
+# Docs: spell out that confidential view keys are per-deployment (auditor registry), not per-account — and what the recipient channel actually reveals
 
-- Status: DRAFT — do not open online before human review (day 3)
-- Repo it belongs to: OpenZeppelin/stellar-contracts (branch feat/confidential-verifier-ultrahonk)
-- Version/commit: 9b5ed96; demo deployment probed on testnet, RPC protocol 27 (2026-08-03)
+- Status: DRAFT — do not open online before human review
+- Repo it belongs to: OpenZeppelin/stellar-contracts
+- Verified: 2026-08-04 against `main` @ 9b5ed96 (the confidential token code is on `main`; the demo app pins the `feat/confidential-verifier-ultrahonk` branch as a git dependency)
+- Prior art we read first: #702 (auditor contract spec — states the admin gating is deliberate, with the identity/zero-key rationale) and #770 (Audit L-02, clarified that `register` binds an account to *any existing* `auditor_id`, existence-checked only). This issue is the downstream documentation gap those two leave, not a re-report of either.
 
 ## Context / use case
 
-We build a community-fund wallet where a goal account's incoming
-contributions should be verifiable by ANYONE (a deliberately published view
-key), while contributor balances stay private. The preview's only view-key
-mechanism is the auditor registry: a `u32 auditor_id → Grumpkin key` table on
-the auditor contract; each account commits to ONE id at `register()` and the
-token fetches both parties' keys on every transfer
-(`packages/tokens/src/confidential/storage.rs:686-687`). There is no
-per-account key export, and `register_key` is operator/role-gated.
+We are building a community-fund wallet: contributions to a goal account
+should be verifiable by *anyone* through a deliberately published view key,
+while contributors' own balances stay private. That made us look for the
+smallest scope a view key can have.
 
-## Repro steps
+## What the code says
 
-Invoke `register_key(77, <fresh Grumpkin point>, <our G-address>)` on the
-official demo auditor contract
-`CA4II62E35TQKPGHCPBD6EBAS732GSGS6H37UUWKEDHR4YTBVMPHVY4L` with a
-friendbot-funded account.
+The only view-key mechanism in the preview is the auditor registry — a
+`u32 auditor_id → Grumpkin point` table on the auditor contract:
 
-## Expected
+- an account commits to one `auditor_id` at registration
+  (`packages/tokens/src/confidential/storage.rs:63` and `:422-430`; the doc
+  comment at `:397` calls it "the auditor key index this account commits to")
+- every transfer fetches *both* parties' keys by that id
+  (`packages/tokens/src/confidential/storage.rs:686-687`)
+- there is no per-account key export
 
-Some path for a user/dapp to obtain a scoped view key for their own account
-without owning the deployment.
+So the granularity of visibility is the deployment, not the account. #770
+clarified that an account may *select* among existing auditor ids; it does not
+say that no smaller scope exists, which is the part a reader needs.
 
-## Observed (verbatim)
+## What we hit in practice
+
+On a shared deployment, obtaining a view key means getting an id registered,
+and that is gated. Calling `register_key` on the demo deployment's auditor
+contract `CA4II62E35TQKPGHCPBD6EBAS732GSGS6H37UUWKEDHR4YTBVMPHVY4L` from a
+friendbot-funded account fails at simulation:
 
 ```
 simulate register_key failed: HostError: Error(Contract, #2000)
 ```
 
-with diagnostic `["failing with contract error", 2000]` — #2000 =
+with diagnostic `["failing with contract error", 2000]` — #2000 is
 `AccessControlError::Unauthorized`
-(`packages/access/src/access_control/mod.rs:384`). View keys exist only at
-deployment level, minted by the auditor-contract admin.
+(`packages/access/src/access_control/mod.rs:384`).
 
-## Workaround (works today, worth documenting)
+To be precise about whose decision that is: the library's
+`auditor::register_key` (`packages/tokens/src/confidential/auditor/storage.rs:64`)
+carries no authorization of its own; the role check comes from the deployed
+contract, which declares `#[only_role(operator, "manager")]`. In the demo that
+is `contracts/auditor/src/lib.rs:40-41` in
+brozorec/stellar-confidential-token-demo. We are not asking for that gate to
+be removed — #702 explains why it exists. We are reporting that a reader of
+the confidential docs cannot easily work out that this is the situation.
 
-Deploy your own CT stack and be the auditor admin: we registered auditor id 0
+## Workaround (works today, and may be worth documenting as the pattern)
+
+Deploy your own CT stack and be the auditor admin. We registered auditor id 0
 as a private custodian key and id 1 as the goal's dedicated, published view
-key. The published id-1 secret then opens ONLY the recipient channel of
-transfers to the goal (`auditTransfer(k1).channelsAgree === false` on-chain:
-the sender channel stays unreadable). One wrapper per community is a workable
-deployment model.
+key. One wrapper per community turns out to be a perfectly workable deployment
+model, and "run your own auditor contract if you need a view key you control"
+is a sentence the docs could say outright.
 
-## Design note for the docs (granularity)
+## The part that most needs documenting: what a view key reveals
 
-The recipient channel necessarily reveals each transfer's AMOUNT (+ `r_tx`, a
-full opening of `C_tx`) to the view-key holder — per-contribution amounts, not
-just totals. "Publish the goal's view key" therefore means itemized
-transparency of inflows, while contributor balances remain private. If
-per-account or per-scope self-service view keys (or aggregate-only keys) are
-on the roadmap, the docs stating that explicitly would help teams design
-around today's granularity.
+We expected a published view key to expose aggregate inflows. It does more
+than that. Holding the id-1 secret opens the *recipient* channel of every
+transfer into the goal, which is a full opening of `C_tx` (amount plus `r_tx`)
+— that is, per-contribution amounts, not just a total. It does not open the
+sender channel: with our published key,
+`auditTransfer(k1).channelsAgree === false` on-chain, and contributors'
+balances stay private.
+
+That asymmetry is exactly what we wanted, but we only established it by
+reading `storage.rs` and then testing it on-chain. A short paragraph in
+`packages/tokens/src/confidential/docs/COMPLIANCE.md` (or `DESIGN.md` §8.1,
+next to the L-02 clarification) saying "an auditor key opens both channels of
+transfers involving accounts bound to that id, at per-transfer granularity" —
+plus a note on whether per-account, per-scope, or aggregate-only keys are on
+the roadmap — would let teams reason about disclosure before they build.
+
+Happy to open a PR against the docs if that is easier than a discussion here.

@@ -1,8 +1,17 @@
 # Test files ship a checksum-invalid placeholder contract id that poisons batched getEvents calls
 
-- Status: DRAFT — do not open online before human review (day 3)
+- Status: **DO NOT FILE — DROP** (fact-check 2026-08-04). No duplicate exists;
+  the claim is factually true but does not describe a defect.
+  `packages/sdk/src/crypto/address.ts:25-31` shows `addressToField` validates
+  only the 56-character *length* and then Poseidon-hashes the ASCII bytes, so
+  a checksum is irrelevant to what these fixtures are for and the tests are
+  correct as written. The demo publishes its real, deployed ids in README.md
+  and `deployments/testnet.json`; scraping test files for deployable contract
+  ids is our own unusual workflow, not a supported one. Filing this would read
+  as "your test fixture broke my scraper" — and it would be the very first
+  issue ever opened on that repo (it currently has none).
 - Repo it belongs to: brozorec/stellar-confidential-token-demo
-- Version/commit: ac67499
+- Version/commit: ac67499 (id confirmed present in `packages/sdk/test/{parity,payload,prove,smoke}.mjs`)
 
 ## Repro steps
 
