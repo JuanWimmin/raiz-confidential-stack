@@ -179,7 +179,7 @@ COULD (solo si sobra tiempo): withdraw completo · segunda meta · métricas.
 ## ESTADO ACTUAL (actualizar al cierre de CADA sesión)
 
 ```
-Última actualización: 2026-08-02 (Sesión 0 ejecutada)
+Última actualización: 2026-08-05 (video publicado + landing en producción)
 Decisión del spike día 0:  GO COMPLETO (3-ago 12:00) — las 3 pruebas corren DENTRO
                            del WebView en 10.8-15.7 s (<90 s), sin OOM, en un Vivo
                            Y21 (4 GB). Detalle y matriz completa: docs/SPIKE_DIA0.md.
@@ -265,9 +265,38 @@ Sesión 8 (hardening+README):    [~]  README reescrito con datos reales (el agen
                                      (Cargo.lock, imagen vieja, PORT vs mapeo) ·
                                      despliegue público = TÚNEL cloudflared (Juancho
                                      no tiene VM): scripts/serve-public.ps1 ·
-                                     FALTA: publicar issues (requiere OK de Juancho),
-                                     ensayo cronometrado final
-Sesión 9 (video+submission):    [ ]
+                                     HECHO después: de los 10 borradores, 5 no
+                                     sobrevivieron a la reverificación y 5 están
+                                     publicados (README §9)
+Sesión 9 (video+submission):    [~]  VIDEO PUBLICADO: https://youtu.be/jjCPrNCHZhQ
+                                     — canal ProtocoloRaíz, público, 3:44 (224 s
+                                     verificados en sus metadatos). OJO: es la
+                                     CORRIDA COMPLETA, no el corte de 2:30 que
+                                     planeaba docs/video/README.md; se decidió no
+                                     recortar porque cada tijeretazo candidato
+                                     quitaba evidencia (el contador de 22,6 s) y
+                                     no relleno. README y landing lo dicen así.
+                                     LANDING EN PRODUCCIÓN: web/index.html (la
+                                     antigua era 36 KB; la nueva son 347 KB con 5
+                                     imágenes incrustadas). Desplegada y VERIFICADA
+                                     en vivo byte a byte en
+                                     https://raizapp.xyz/sobre.html (repo
+                                     JuanWimmin.github.io, commit 6a2669c).
+                                     sobre-v2.html borrado. Auditada por 14 agentes
+                                     en 7 dimensiones: 65 hallazgos confirmados y
+                                     aplicados — entre ellos, la página era
+                                     INVISIBLE sin JS, --texto-3 fallaba WCAG en
+                                     sus 18 usos, el conmutador de fuente perdía
+                                     temporizadores, y 3 afirmaciones prometían más
+                                     de lo que el proyecto prueba.
+                                     HISTORIAL REAL DE LA META (sacado de la db de
+                                     raiz-memory decodificando topics a strkey — NO
+                                     redescubrir): 9 aportes en los ledgers 3950172,
+                                     3950262, 3953087, 3960072, 3960225, 3965868,
+                                     3966778, 3970209 y 3970848 = 25+25+5+2×6 = 67
+                                     XLM. NO existe ningún aporte en el 3970912
+                                     (ese número era falso y estuvo publicado).
+                                     FALTA: enviar la submission antes del mediodía.
 Bloqueantes abiertos: ninguno. (Docs de propuestas ya en /docs, 2-ago.)
   Nota Fase 1 del spike: Chrome Android NO instala extensiones → el flujo completo
   del demo (que firma con Freighter) no corre tal cual en el teléfono; lo que se
@@ -279,13 +308,13 @@ Bloqueantes abiertos: ninguno. (Docs de propuestas ya en /docs, 2-ago.)
   y bb.js 0.87 default es threads:1 → todo el demo oficial prueba a 1 hilo aunque
   haya crossOriginIsolated (2-3x regalado; en friction-report). Nuestro shim DEBE
   pasar threads explícito.
-Siguiente paso concreto: terminar Sesión 6 (workflow reanudado tras corte por
-  límite de sesión: tema+componentes de RAÍZ y capa de datos YA en el árbol y
-  compilando; faltan goal-total en la app, las 3 pantallas y el ensayo). Luego
-  Sesión 9 (video 2:30 + submission antes del mediodía del 6).
-  DECISIÓN PENDIENTE DE JUANCHO: publicar o no los 10 issue drafts de
-  docs/issues-drafts/ en los repos de OZ/Nethermind/Stellar (Sesión 8 paso 4
-  exige su OK explícito, uno por uno).
+Siguiente paso concreto: ENVIAR LA SUBMISSION antes del mediodía del 6. Todo lo
+  demás está hecho y en producción: repo empujado (c25a5d8), video público y
+  landing desplegada y verificada en vivo. El texto de la submission está en
+  docs/submission-text.md y la lista de comprobación en docs/submission-checklist.md.
+  RESUELTO (ya no es decisión pendiente): de los 10 issue drafts se reverificaron
+  todos, 5 no sobrevivieron y 5 están publicados — stellar-rpc#918 y #919,
+  stellar-confidential-token-demo#4, stellar-contracts#832 y #833 (README §9).
   OJO al renombrar applicationId a xyz.raiz.sobre: borra EncryptedSharedPreferences,
   así que el teléfono necesita "Abrir mi sobre" (register) de nuevo — es un beat
   del video, no un bug.
