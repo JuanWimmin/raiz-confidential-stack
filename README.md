@@ -5,7 +5,7 @@
 
 **Stellar Summit SP 2026 · Special Bounty: Confidential-Token & Private-Payment Wallets · Team: Raiz Protocol**
 
-[**Landing**](https://raizapp.xyz/sobre.html) · [**Install the APK**](https://github.com/JuanWimmin/raiz-confidential-stack/releases/tag/v0.1.0-summit) · [**Verify the fund yourself**](#5-dont-trust-our-ui)
+[**Watch the demo (3:44)**](https://youtu.be/jjCPrNCHZhQ) · [**Landing**](https://raizapp.xyz/sobre.html) · [**Install the APK**](https://github.com/JuanWimmin/raiz-confidential-stack/releases/tag/v0.1.0-summit) · [**Verify the fund yourself**](#5-dont-trust-our-ui)
 
 Everything below was executed against **Stellar testnet on 2026-08-03 and 2026-08-04**. Every contract id, tx hash, timing and screenshot is real and clickable; nothing here is a mockup. Chain-dependent counts say when they were measured, because they move.
 
@@ -341,7 +341,7 @@ A preview's most useful hackathon output is a precise bug report — and the dis
 
 - **Repo:** <https://github.com/JuanWimmin/raiz-confidential-stack> — this is the submission.
 - **Landing page:** <https://raizapp.xyz/sobre.html> — source in [`web/`](web/), one self-contained `index.html`, no build step, no dependencies. Served from the team's existing GitHub Pages site, so it outlives the laptop this was built on.
-- **Demo video (2:30):** recorded on 5–6 August 2026 from the shooting script in [`docs/demo-run.md`](docs/demo-run.md), which was already rehearsed end to end on the phone with stopwatch timings. The link goes here and into the landing page the moment it is up; if you are reading this and there is no link, it is not up yet.
+- **Demo video — <https://youtu.be/jjCPrNCHZhQ>:** recorded on the device on 5–6 August 2026 from the shooting script in [`docs/demo-run.md`](docs/demo-run.md), rehearsed end to end on the phone with stopwatch timings. Published as the **complete 3:44 run rather than the planned 2:30 cut**, because the beat that carries the argument is a 22.6-second proof counter running uncut on a 4 GB phone, and every candidate trim shortened the evidence rather than the padding. Nothing in it is mocked, trimmed or sped up. It plays in the landing page too, behind a click-to-load facade that contacts YouTube only when a visitor asks.
 - **Public Raiz Memory instance:** an ephemeral **cloudflared quick tunnel** started by [`scripts/serve-public.ps1`](scripts/serve-public.ps1) — we have no VM, and the quick tunnel regenerates its hostname on every start, so no permanent URL is promised here. The reproducible route for a judge is the container in [`docs/deploy-public.md`](docs/deploy-public.md); it needs no tunnel and no trust in us.
 
 ---
